@@ -25,30 +25,16 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  const queryPath = req.query?.path;
-  if (Array.isArray(queryPath) && queryPath.length) {
-    return queryPath.map((part) => decodeURIComponent(String(part))).join('/').replace(/^\/+|\/+$/g, '');
-  }
-  if (typeof queryPath === 'string' && queryPath) {
-    return queryPath.split('/').filter(Boolean).map((part) => decodeURIComponent(part)).join('/');
-  }
-
+  // Vercel peut fournir req.url sous forme relative (/api/collars).
+  // On évite volontairement new URL() pour ne jamais provoquer
+  // "TypeError: Invalid URL" sur les fonctions serverless.
   const raw = String(req.url || '/api');
-  const pathname = raw.split('?')[0];
+  const pathname = raw.split('?')[0] || '/api';
   return pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  if (req.query) {
-    const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(req.query)) {
-      if (key === 'path') continue;
-      result[key] = Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '');
-    }
-    return result;
-  }
-
-  const raw = String(req.url || '/api');
+  const raw = String(req.url || '');
   const queryString = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
   return Object.fromEntries(new URLSearchParams(queryString).entries());
 }
@@ -220,60 +206,27 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (body.status !== undefined) updates.status = body.status;
       if (body.notes !== undefined) updates.notes = body.notes;
 
-      if (Object.keys(updates).length === 0 && body.activeZoneId === undefined) {
-        return error(res, 400, 'Aucune modification à enregistrer.');
-      }
+      const { data, error: dbError } = await supabase
+        .from('collars')
+        .update(updates)
+        .eq('id', id)
+        .select('*')
+        .single();
 
-      let data: any = null;
-      if (Object.keys(updates).length > 0) {
-        const result = await supabase
-          .from('collars')
-          .update(updates)
-          .eq('id', id)
-          .select('*')
-          .single();
-
-        if (result.error) return error(res, 400, 'Impossible de modifier le collier.', result.error.message);
-        data = result.data;
-      } else {
-        const result = await supabase.from('collars').select('*').eq('id', id).single();
-        if (result.error) return error(res, 404, 'Collier introuvable.', result.error.message);
-        data = result.data;
-      }
+      if (dbError) return error(res, 400, 'Impossible de modifier le collier.', dbError.message);
 
       if (body.activeZoneId !== undefined) {
-        const { error: deleteZoneError } = await supabase
-          .from('collar_zones')
-          .delete()
-          .eq('collar_id', id);
-        if (deleteZoneError) {
-          return error(res, 400, 'Impossible de mettre à jour la zone du collier.', deleteZoneError.message);
-        }
-
+        await supabase.from('collar_zones').delete().eq('collar_id', id);
         if (body.activeZoneId) {
-          const { error: insertZoneError } = await supabase.from('collar_zones').insert({
+          await supabase.from('collar_zones').insert({
             collar_id: id,
             zone_id: body.activeZoneId,
             enabled: true,
           });
-          if (insertZoneError) {
-            return error(res, 400, 'Impossible d'affecter la zone au collier.', insertZoneError.message);
-          }
         }
       }
 
-      let assignedZoneId: string | null | undefined = body.activeZoneId;
-      if (body.activeZoneId === undefined) {
-        const { data: zoneLink } = await supabase
-          .from('collar_zones')
-          .select('zone_id')
-          .eq('collar_id', id)
-          .limit(1)
-          .maybeSingle();
-        assignedZoneId = zoneLink?.zone_id || null;
-      }
-
-      return res.status(200).json(mapCollar(data, assignedZoneId));
+      return res.status(200).json(mapCollar(data, body.activeZoneId));
     }
 
     if (collarMatch && method === 'DELETE') {
