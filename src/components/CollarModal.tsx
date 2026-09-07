@@ -5,7 +5,7 @@ import { Radio, Palette, Check, X, Shield, Settings2, Smartphone, Cpu } from 'lu
 interface CollarModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (collarData: Partial<GPSCollar>) => Promise<boolean> | boolean;
+  onSave: (collarData: Partial<GPSCollar>) => Promise<boolean>;
   initialCollar?: GPSCollar | null;
   zones: GeofenceZone[];
 }
