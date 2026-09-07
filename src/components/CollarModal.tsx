@@ -41,6 +41,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   const [mode, setMode] = useState<'simulation' | 'real'>('simulation');
   const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>('active');
   const [notes, setNotes] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -68,9 +69,10 @@ export const CollarModal: React.FC<CollarModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sheepName.trim() || !collarNumber.trim()) return;
+    if (isSaving || !sheepName.trim() || !collarNumber.trim()) return;
 
-    const saved = await onSave({
+    setIsSaving(true);
+    const success = await onSave({
       sheepName: sheepName.trim(),
       collarNumber: collarNumber.trim(),
       animalNumber: animalNumber.trim() || undefined,
@@ -84,7 +86,8 @@ export const CollarModal: React.FC<CollarModalProps> = ({
       notes: notes.trim() || undefined,
     });
 
-    if (saved) onClose();
+    setIsSaving(false);
+    if (success) onClose();
   };
 
   const inputClass =
@@ -299,9 +302,10 @@ export const CollarModal: React.FC<CollarModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+              disabled={isSaving}
+              className="px-5 py-2.5 bg-[#5A6F4E] hover:bg-[#4A5E3E] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
             >
-              {initialCollar ? 'Enregistrer Modifications' : 'Créer le Collier'}
+              {isSaving ? 'Enregistrement...' : initialCollar ? 'Enregistrer Modifications' : 'Créer le Collier'}
             </button>
           </div>
         </form>

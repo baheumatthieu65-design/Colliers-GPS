@@ -75,26 +75,23 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 relative z-30 pointer-events-auto">
+                <div className="flex items-center space-x-1 relative z-20 pointer-events-auto">
                   <button
                     type="button"
-                    onPointerDown={(e) => { e.stopPropagation(); }}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       onEditCollar(collar);
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-[#3E4A35] bg-[#F2F4F1] hover:bg-[#D8E0D5] border border-[#C5D1C1] rounded-lg cursor-pointer pointer-events-auto touch-manipulation"
+                    className="p-2 text-[#7D8A74] hover:text-[#2C3327] hover:bg-[#F2F4F1] rounded-lg transition-all cursor-pointer pointer-events-auto"
                     title="Modifier le collier"
                     aria-label={`Modifier ${collar.sheepName}`}
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Modifier</span>
+                    <Edit3 className="w-4 h-4" />
                   </button>
 
                   <button
                     type="button"
-                    onPointerDown={(e) => { e.stopPropagation(); }}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -102,12 +99,11 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                         onDeleteCollar(collar.id);
                       }
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg cursor-pointer pointer-events-auto touch-manipulation"
+                    className="p-2 text-[#7D8A74] hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer pointer-events-auto"
                     title="Supprimer le collier"
                     aria-label={`Supprimer ${collar.sheepName}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Supprimer</span>
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

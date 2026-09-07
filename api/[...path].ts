@@ -25,27 +25,32 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  // Vercel populates req.query.path for a [...path] function.
-  // Do not use new URL(req.url): in some Vercel runtimes req.url is relative
-  // and causes the recurring "TypeError: Invalid URL" 500 errors.
-  const queryPath = req.query?.path;
-  if (Array.isArray(queryPath)) {
-    return queryPath.map(String).join('/').replace(/^\/+|\/+$/g, '');
-  }
-  if (typeof queryPath === 'string' && queryPath) {
-    return queryPath.replace(/^\/+|\/+$/g, '');
-  }
+  const raw = req.query?.path;
+  if (Array.isArray(raw)) return raw.join('/').replace(/^\/+|\/+$/g, '');
+  if (typeof raw === 'string' && raw) return raw.replace(/^\/+|\/+$/g, '');
 
-  const raw = String(req.url || '');
-  const pathname = raw.split('?')[0] || '';
-  return pathname.replace(/^\/?api\/?/, '').replace(/^\/+|\/+$/g, '');
+  const rawUrl = req.url || '';
+  const pathname = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
+    ? new URL(rawUrl).pathname
+    : rawUrl.split('?')[0];
+  return pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  // Vercel already parses query parameters for us.
-  const parsed = { ...(req.query || {}) } as Record<string, any>;
-  delete parsed.path;
-  return parsed;
+  if (req.query) {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(req.query)) {
+      if (key === 'path') continue;
+      if (Array.isArray(value)) out[key] = value[0] ?? '';
+      else if (value != null) out[key] = String(value);
+    }
+    return out;
+  }
+
+  const rawUrl = req.url || '';
+  if (!rawUrl) return {};
+  const queryString = rawUrl.includes('?') ? rawUrl.slice(rawUrl.indexOf('?') + 1) : '';
+  return Object.fromEntries(new URLSearchParams(queryString).entries());
 }
 
 function signalQuality(signal: number | null | undefined) {
@@ -215,6 +220,10 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (body.status !== undefined) updates.status = body.status;
       if (body.notes !== undefined) updates.notes = body.notes;
 
+      if (Object.keys(updates).length === 0) {
+        return error(res, 400, 'Aucune modification à enregistrer.');
+      }
+
       const { data, error: dbError } = await supabase
         .from('collars')
         .update(updates)
@@ -225,13 +234,15 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (dbError) return error(res, 400, 'Impossible de modifier le collier.', dbError.message);
 
       if (body.activeZoneId !== undefined) {
-        await supabase.from('collar_zones').delete().eq('collar_id', id);
+        const { error: zoneDeleteError } = await supabase.from('collar_zones').delete().eq('collar_id', id);
+        if (zoneDeleteError) return error(res, 400, 'Impossible de modifier l’affectation à la zone.', zoneDeleteError.message);
         if (body.activeZoneId) {
-          await supabase.from('collar_zones').insert({
+          const { error: zoneInsertError } = await supabase.from('collar_zones').insert({
             collar_id: id,
             zone_id: body.activeZoneId,
             enabled: true,
           });
+          if (zoneInsertError) return error(res, 400, 'Impossible d’affecter le collier à la zone.', zoneInsertError.message);
         }
       }
 
