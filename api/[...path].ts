@@ -25,12 +25,12 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  const url = new URL(req.url || 'http://localhost/api');
+  const url = new URL(req.url || '/api', 'http://localhost');
   return url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  const url = new URL(req.url || 'http://localhost/api');
+  const url = new URL(req.url || '/api', 'http://localhost');
   return Object.fromEntries(url.searchParams.entries());
 }
 
