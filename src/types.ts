@@ -1,7 +1,7 @@
 export interface PushModeConfig {
   active: boolean;
-  intervalSeconds: number; // e.g. 30 seconds vs normal 1800s (30 min)
-  expiresAt: string | null; // ISO timestamp
+  intervalSeconds: number;
+  expiresAt: string | null;
   durationMinutes: number;
 }
 
@@ -9,15 +9,21 @@ export interface GPSCollar {
   id: string;
   sheepName: string;
   collarNumber: string;
+  animalNumber?: string;
   color: string;
   batteryLevel: number;
-  signalQuality: 'Excellent' | 'Bon' | 'Moyen' | 'Faible';
+  signalQuality: 'Excellent' | 'Bon' | 'Moyen' | 'Faible' | 'Inconnu';
   lastUpdate: string;
   currentLat: number;
   currentLng: number;
-  status: 'inside_zone' | 'out_of_zone' | 'no_signal';
+  status: 'inside_zone' | 'out_of_zone' | 'no_signal' | 'offline';
   activeZoneId?: string;
   pushMode: PushModeConfig;
+  imei?: string;
+  iccid?: string;
+  simPhone?: string;
+  mode?: 'simulation' | 'real';
+  notes?: string;
 }
 
 export interface GeofenceZone {
@@ -27,8 +33,8 @@ export interface GeofenceZone {
   centerLat: number;
   centerLng: number;
   radiusMeters: number;
-  polygonCoords?: Array<[number, number]>; // Optional polygon coordinates [lat, lng]
-  assignedCollarIds: string[]; // empty or contains collar ids ('all' means applies to all)
+  polygonCoords?: Array<[number, number]>;
+  assignedCollarIds: string[];
   color: string;
   active: boolean;
   alertOnExit: boolean;
@@ -69,12 +75,12 @@ export interface GeofenceAlert {
 }
 
 export interface PushCommandRequest {
-  collarIds: string[]; // ['all'] or array of IDs
+  collarIds: string[];
   durationMinutes: number;
   intervalSeconds: number;
 }
 
 export interface SimulationSettings {
   isSimulating: boolean;
-  speedFactor: number; // 1x, 5x, 10x for live demo
+  speedFactor: number;
 }
