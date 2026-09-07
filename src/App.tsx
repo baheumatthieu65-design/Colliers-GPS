@@ -102,6 +102,14 @@ export default function App() {
   }, [fetchCollars, fetchZones, fetchAlerts]);
 
   // Handlers for Collars
+  const formatApiError = (data: any, status: number) => {
+    const details = data?.details;
+    if (typeof details === 'string' && details.trim()) return details;
+    if (details && typeof details === 'object') {
+      return details.message || details.details || details.hint || JSON.stringify(details);
+    }
+    return data?.error || data?.message || `Erreur HTTP ${status}`;
+  };
   const handleSaveCollar = async (collarData: Partial<GPSCollar>): Promise<boolean> => {
     try {
       const isEditing = Boolean(editingCollar?.id);
@@ -118,7 +126,7 @@ export default function App() {
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data?.details || data?.error || data?.message || `Erreur HTTP ${res.status}`);
+        throw new Error(formatApiError(data, res.status));
       }
 
       await fetchCollars();
@@ -144,7 +152,7 @@ export default function App() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data?.details || data?.error || data?.message || `Erreur HTTP ${res.status}`);
+        throw new Error(formatApiError(data, res.status));
       }
 
       if (editingCollar?.id === id) {
