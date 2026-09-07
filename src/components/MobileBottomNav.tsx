@@ -1,7 +1,6 @@
 import React from 'react';
 import { 
   MapPin, 
-  Radio, 
   Layers, 
   ShieldAlert, 
   History 
@@ -31,7 +30,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     {
       id: 'collars',
       label: 'Colliers',
-      icon: Radio,
+      icon: null,
       badge: null,
     },
     {
@@ -72,7 +71,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               }`}
             >
               <div className="relative">
-                <Icon className={`w-5 h-5 ${isActive ? 'scale-110' : ''}`} />
+                {Icon ? (
+                  <Icon className={`w-5 h-5 ${isActive ? 'scale-110' : ''}`} />
+                ) : (
+                  <span className={`inline-flex items-center justify-center w-5 h-5 ${isActive ? 'scale-110' : ''}`} aria-hidden="true">
+                    <span className="w-5 h-2.5 rounded-full border-[2px] border-current relative after:content-[''] after:absolute after:-right-1 after:top-1/2 after:-translate-y-1/2 after:w-1 after:h-1 after:rounded-full after:bg-current" />
+                  </span>
+                )}
                 {item.badge !== null && (
                   <span className="absolute -top-1.5 -right-2.5 bg-red-600 text-white font-extrabold text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse border border-white">
                     {item.badge}

@@ -18,13 +18,13 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
   onDeleteZone,
 }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       
       {/* Header Banner */}
-      <div className="bg-white border border-[#E2E6DF] p-6 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm">
+      <div className="bg-white border border-[#E2E6DF] p-3 sm:p-6 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-[#3E4A35] flex items-center space-x-2">
-            <Layers className="w-6 h-6 text-[#5A6F4E]" />
+          <h2 className="text-base sm:text-xl font-bold text-[#3E4A35] flex items-center space-x-2">
+            <Layers className="w-4 h-4 sm:w-6 sm:h-6 text-[#5A6F4E]" />
             <span>Gestion des Clôtures Virtuelles & Zones de Pâturage</span>
           </h2>
           <p className="text-xs text-[#7D8A74] mt-1 font-medium">
@@ -36,7 +36,7 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
           onClick={onOpenAddZone}
           className="flex items-center justify-center space-x-2 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span>Créer une Clôture Virtuelle</span>
         </button>
       </div>
@@ -51,16 +51,16 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
           return (
             <div 
               key={zone.id}
-              className="bg-white border border-[#E2E6DF] rounded-2xl p-5 shadow-sm hover:border-[#C5D1C1] transition-all flex flex-col justify-between"
+              className="bg-white border border-[#E2E6DF] rounded-2xl p-3 sm:p-5 shadow-sm hover:border-[#C5D1C1] transition-all flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
                     <div 
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold shadow-sm"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-bold shadow-sm"
                       style={{ backgroundColor: zone.color }}
                     >
-                      <Shield className="w-5 h-5" />
+                      <Shield className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div>
                       <h3 className="font-bold text-[#2C3327] text-base">{zone.name}</h3>
@@ -75,7 +75,7 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
                       onClick={() => onEditZone(zone)}
                       className="p-2 text-[#7D8A74] hover:text-[#2C3327] hover:bg-[#F2F4F1] rounded-lg cursor-pointer"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button
                       onClick={() => {
@@ -85,7 +85,7 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
                       }}
                       className="p-2 text-[#7D8A74] hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>

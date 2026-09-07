@@ -35,10 +35,6 @@ interface InteractiveMapProps {
 
 type MapTileStyle = 'satellite' | 'topo' | 'osm';
 
-const OFFLINE_ORTHO_MAX_ZOOM = 16;
-const OFFLINE_ORTHO_CENTER = { lat: 42.9637, lng: 0.3829 };
-const OFFLINE_ORTHO_RADIUS_KM = 10;
-
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   collars,
   zones,
@@ -64,8 +60,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [tileStyle, setTileStyle] = useState<MapTileStyle>('satellite');
   const [isTileMenuOpen, setIsTileMenuOpen] = useState<boolean>(false);
   const [mapBearing, setMapBearing] = useState<number>(0); // North direction rotation angle
-  const [zoomLevel, setZoomLevel] = useState<number>(13);
-  const [offlineOrthoAvailable, setOfflineOrthoAvailable] = useState<boolean>(true);
+  const [zoomLevel, setZoomLevel] = useState<number>(15);
 
   // Collar visibility toggle states (petits boutons pour afficher ou pas chaque collier)
   const [hiddenCollarIds, setHiddenCollarIds] = useState<string[]>([]);
@@ -79,29 +74,22 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   const selectedCollar = collars.find(c => c.id === selectedCollarId);
 
-  // Fond de carte : l'orthophoto IGN est prioritairement locale.
-  // Les tuiles sont fournies dans public/offline-maps/ign-ortho/{z}/{x}/{y}.jpg
-  // et restent donc disponibles même sans réseau une fois la PWA installée et
-  // le paquet de carte intégré au déploiement. Le script scripts/download-offline-ortho.mjs
-  // permet de constituer ce paquet autour d'Ilhet.
-  const tileSources: Record<MapTileStyle, { url: string; name: string; attribution: string; maxNativeZoom: number }> = {
+  // Map Tile Source URLs
+  const tileSources: Record<MapTileStyle, { url: string; name: string; attribution: string }> = {
     satellite: {
-      name: 'Orthophoto IGN · hors-ligne',
-      url: '/offline-maps/ign-ortho/{z}/{x}/{y}.jpg',
-      attribution: 'IGN · BD ORTHO® · Licence Ouverte Etalab',
-      maxNativeZoom: OFFLINE_ORTHO_MAX_ZOOM,
+      name: 'Vue Satellite',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Esri World Imagery & Pasture Topo',
     },
     topo: {
       name: 'Carte Topographique',
       url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
       attribution: 'OpenTopoMap & SRTM Contour',
-      maxNativeZoom: 17,
     },
     osm: {
       name: 'Plan Standard',
       url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution: 'OpenStreetMap Contributors',
-      maxNativeZoom: 19,
     },
   };
 
@@ -109,8 +97,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const initialLat = collars[0]?.currentLat || OFFLINE_ORTHO_CENTER.lat;
-    const initialLng = collars[0]?.currentLng || OFFLINE_ORTHO_CENTER.lng;
+    const initialLat = collars[0]?.currentLat || 42.8450;
+    const initialLng = collars[0]?.currentLng || -0.0150;
 
     const map = L.map(mapContainerRef.current, {
       center: [initialLat, initialLng],
@@ -118,28 +106,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       zoomControl: false,
     });
 
-    const source = tileSources[tileStyle];
-    const tileLayer = L.tileLayer(source.url, {
+    const tileLayer = L.tileLayer(tileSources[tileStyle].url, {
       maxZoom: 19,
-      maxNativeZoom: source.maxNativeZoom,
-      attribution: source.attribution,
+      attribution: tileSources[tileStyle].attribution,
     }).addTo(map);
-
-    tileLayer.on('tileerror', (event: any) => {
-      if (tileStyle === 'satellite') {
-        setOfflineOrthoAvailable(false);
-        // En ligne, on bascule sur l'orthophoto IGN distante si une tuile
-        // locale n'est pas présente. Hors-ligne, Leaflet conserve la tuile
-        // locale disponible et aucun appel réseau n'est requis.
-        if (navigator.onLine) {
-          const tile = event.tile as HTMLImageElement;
-          const z = Math.min(map.getZoom(), OFFLINE_ORTHO_MAX_ZOOM);
-          const x = (event.coords as any).x;
-          const y = (event.coords as any).y;
-          tile.src = `https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=${z}&TILEROW=${y}&TILECOL=${x}`;
-        }
-      }
-    });
 
     tileLayerRef.current = tileLayer;
     mapRef.current = map;
@@ -215,27 +185,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (tileLayerRef.current) {
       mapRef.current.removeLayer(tileLayerRef.current);
     }
-    const source = tileSources[tileStyle];
-    const newTileLayer = L.tileLayer(source.url, {
+    const newTileLayer = L.tileLayer(tileSources[tileStyle].url, {
       maxZoom: 19,
-      maxNativeZoom: source.maxNativeZoom,
-      attribution: source.attribution,
+      attribution: tileSources[tileStyle].attribution,
     }).addTo(mapRef.current);
-
-    newTileLayer.on('tileerror', (event: any) => {
-      if (tileStyle === 'satellite') {
-        setOfflineOrthoAvailable(false);
-        if (navigator.onLine) {
-          const tile = event.tile as HTMLImageElement;
-          const z = Math.min(mapRef.current!.getZoom(), OFFLINE_ORTHO_MAX_ZOOM);
-          const x = (event.coords as any).x;
-          const y = (event.coords as any).y;
-          tile.src = `https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX=${z}&TILEROW=${y}&TILECOL=${x}`;
-        }
-      }
-    });
     tileLayerRef.current = newTileLayer;
-    setOfflineOrthoAvailable(true);
   }, [tileStyle]);
 
   // Render Geofence Zones (Circle or Patatoïde Polygon)
@@ -477,11 +431,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     <div className="flex flex-col space-y-2">
       
       {/* TOP STRIP: Collar Display Toggles & Patatoïde Creator Mode Button */}
-      <div className="bg-white/95 backdrop-blur-md p-2 rounded-xl border border-[#E2E6DF] shadow-xs flex flex-wrap items-center justify-between gap-2">
+      <div className="bg-white/95 backdrop-blur-md p-1.5 sm:p-2 rounded-xl border border-[#E2E6DF] shadow-xs flex flex-wrap items-center justify-between gap-2">
         
         {/* Collar Visibility Toggle Chips */}
         <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-          <span className="text-[11px] font-bold text-[#7D8A74] uppercase tracking-wider whitespace-nowrap mr-1">
+          <span className="text-[9px] sm:text-[11px] font-bold text-[#7D8A74] uppercase tracking-wider whitespace-nowrap mr-1">
             Affichage colliers:
           </span>
 
@@ -511,7 +465,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   color: isHidden ? '#9CA3AF' : '#FFFFFF'
                 }}
               >
-                <span>{isHidden ? '🙈' : '👁️'}</span>
+                <span className="text-[10px]">{isHidden ? '◌' : '◉'}</span>
                 <span>{c.sheepName}</span>
               </button>
             );
@@ -526,10 +480,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 setIsDrawingPatatoide(true);
                 setDrawingPoints([]);
               }}
-              className="bg-[#5A6F4E] hover:bg-[#4A5D3E] text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer whitespace-nowrap"
+              className="bg-[#5A6F4E] hover:bg-[#4A5D3E] text-white font-bold text-xs px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer whitespace-nowrap"
             >
               <Pentagon className="w-3.5 h-3.5" />
-              <span>✍️ Tracé Patatoïde (Limite Zone)</span>
+              <span>Patatoïde</span>
             </button>
           ) : (
             <button
@@ -590,21 +544,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </div>
       )}
 
-      {/* Offline map status */}
-      {tileStyle === 'satellite' && (
-        <div className="absolute top-3 left-3 z-30 pointer-events-none">
-          <div className="bg-[#2C3327]/80 backdrop-blur-md text-white rounded-xl px-3 py-2 shadow-lg border border-white/20 text-[11px]">
-            <div className="font-bold flex items-center gap-1.5">
-              <span className={`inline-block w-2 h-2 rounded-full ${offlineOrthoAvailable ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              Orthophoto IGN hors-ligne
-            </div>
-            <div className="text-white/75 mt-0.5">Ilhet · rayon 10 km · haute définition jusqu’au zoom 16</div>
-          </div>
-        </div>
-      )}
-
       {/* MAP CANVAS CONTAINER - Sized to fit screen without scrolling */}
-      <div className="relative w-full h-[calc(100vh-135px)] min-h-[440px] max-h-[820px] bg-slate-950 overflow-hidden rounded-2xl border border-slate-800 shadow-xl flex flex-col">
+      <div className="relative w-full h-[calc(100dvh-205px)] min-h-[360px] max-h-none sm:h-[calc(100vh-135px)] sm:min-h-[440px] sm:max-h-[820px] bg-slate-950 overflow-hidden rounded-2xl border border-slate-800 shadow-xl flex flex-col">
         
         {/* Map Container with CSS Transform for Bearing Rotation */}
         <div 
@@ -621,7 +562,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <button
             onClick={handleResetNorth}
             title="Réinitialiser la carte au Nord (0°)"
-            className="w-10 h-10 rounded-full bg-[#2C3327]/60 hover:bg-[#2C3327]/85 backdrop-blur-md border border-white/25 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer group active:scale-95"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#2C3327]/60 hover:bg-[#2C3327]/85 backdrop-blur-md border border-white/25 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer group active:scale-95"
           >
             <div 
               className="w-full h-full flex items-center justify-center transition-transform duration-300"
@@ -701,7 +642,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <button
             onClick={() => setIsTileMenuOpen(prev => !prev)}
             title="Changer le Fond de Plan (Satellite / Topo / Plan)"
-            className="w-10 h-10 rounded-full bg-[#2C3327]/70 hover:bg-[#2C3327]/90 backdrop-blur-md border border-white/25 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer active:scale-95"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#2C3327]/70 hover:bg-[#2C3327]/90 backdrop-blur-md border border-white/25 text-white flex items-center justify-center shadow-lg transition-all cursor-pointer active:scale-95"
           >
             <Settings className={`w-5 h-5 ${isTileMenuOpen ? 'rotate-90 text-emerald-400' : ''} transition-transform duration-300`} />
           </button>
@@ -713,7 +654,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-2.5">
                 <div 
-                  className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base text-white shadow-xs border border-white/40"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-bold text-base text-white shadow-xs border border-white/40"
                   style={{ backgroundColor: selectedCollar.color }}
                 >
                   🐑
@@ -830,6 +771,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div className="bg-[#F2F4F1] p-3 rounded-xl text-[11px] text-[#7D8A74] space-y-1">
                 <p>• <strong>{drawingPoints.length} sommets</strong> enregistrés sur la carte.</p>
                 <p>• Les brebis recevront une alerte dès qu'elles franchiront cette frontière patatoïde.</p>
+                <p>• Un nom déjà utilisé est autorisé : une nouvelle zone sera créée sans remplacer l’ancienne.</p>
               </div>
 
               <div className="flex justify-end space-x-2 pt-2">

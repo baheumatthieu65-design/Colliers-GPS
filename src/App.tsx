@@ -17,7 +17,7 @@ import { TrackHistory } from './components/TrackHistory';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SmartphoneFrame } from './components/SmartphoneFrame';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { Radio, ShieldAlert, Zap, Compass, CheckCircle2 } from 'lucide-react';
+import { Radio, ShieldAlert, Zap, Compass, CheckCircle2, Bell as BellIcon } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'map' | 'collars' | 'zones' | 'alerts' | 'history'>('map');
@@ -41,6 +41,7 @@ export default function App() {
   const [editingZone, setEditingZone] = useState<GeofenceZone | null>(null);
 
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
+  const [isAlertsPopupOpen, setIsAlertsPopupOpen] = useState(false);
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -301,10 +302,11 @@ export default function App() {
             setIsPushModalOpen(true);
           }}
           onTriggerSimulatedAlert={handleTriggerSimulatedAlert}
+          onOpenAlerts={() => setIsAlertsPopupOpen(true)}
         />
 
         {/* Main Application Canvas View */}
-        <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 space-y-2 sm:space-y-3 pb-20 md:pb-4">
+        <main className={`flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 pb-20 md:pb-4 ${activeTab === 'map' ? 'space-y-2 overflow-hidden' : 'space-y-2 sm:space-y-3'}`}>
           
           {/* Compact Active Alert Banner */}
           {activeAlertsCount > 0 && activeTab !== 'alerts' && (
@@ -408,6 +410,43 @@ export default function App() {
           )}
 
         </main>
+
+        {/* Alert popup from the bell - stays over the map without changing page */}
+        {isAlertsPopupOpen && (
+          <div className="fixed inset-0 z-[1200] bg-black/45 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-3 sm:p-4" onClick={() => setIsAlertsPopupOpen(false)}>
+            <div className="w-full max-w-md bg-white rounded-2xl border border-[#E2E6DF] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[#E2E6DF]">
+                <div className="flex items-center gap-2">
+                  <BellIcon className="w-4 h-4 text-[#5A6F4E]" />
+                  <h3 className="font-bold text-[#2C3327]">Alertes</h3>
+                  {activeAlertsCount > 0 && <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeAlertsCount}</span>}
+                </div>
+                <button onClick={() => setIsAlertsPopupOpen(false)} className="text-[#7D8A74] hover:text-[#2C3327] text-lg leading-none px-2">×</button>
+              </div>
+              <div className="max-h-[55vh] overflow-y-auto p-3 space-y-2">
+                {alerts.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-[#7D8A74]">Aucune alerte enregistrée.</div>
+                ) : alerts.slice(0, 8).map((alert) => (
+                  <div key={alert.id} className={`p-3 rounded-xl border ${alert.status === 'ACTIVE' ? 'border-red-200 bg-red-50' : 'border-[#E2E6DF] bg-[#F9FAF9]'}`}>
+                    <div className="flex items-start gap-2">
+                      <span className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${alert.status === 'ACTIVE' ? 'bg-red-500' : 'bg-[#5A6F4E]'}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="text-xs text-[#2C3327] truncate">{alert.type || 'Alerte'}</strong>
+                          <span className="text-[10px] text-[#7D8A74] whitespace-nowrap">{new Date(alert.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p className="text-[11px] text-[#5E6659] mt-0.5">{alert.message}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-3 border-t border-[#E2E6DF]">
+                <button onClick={() => { setIsAlertsPopupOpen(false); setActiveTab('alerts'); }} className="w-full py-2.5 rounded-xl bg-[#5A6F4E] text-white text-xs font-bold">Voir toutes les alertes</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Mobile Bottom Navigation Bar */}
         <MobileBottomNav
