@@ -31,6 +31,7 @@ interface InteractiveMapProps {
   trackHistoryLogs: GPSPositionLog[];
   onOpenPushModalForCollar: (collarId: string) => void;
   onSaveZone?: (zone: Partial<GeofenceZone>) => void;
+  startPatatoideRequest?: number;
 }
 
 type MapTileStyle = 'satellite' | 'topo' | 'osm';
@@ -43,6 +44,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   trackHistoryLogs,
   onOpenPushModalForCollar,
   onSaveZone,
+  startPatatoideRequest = 0,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -71,6 +73,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [isSaveZoneModalOpen, setIsSaveZoneModalOpen] = useState<boolean>(false);
   const [patatoideName, setPatatoideName] = useState<string>('');
   const [patatoideColor, setPatatoideColor] = useState<string>('#5A6F4E');
+  const initialFitDoneRef = useRef(false);
 
   const selectedCollar = collars.find(c => c.id === selectedCollarId);
 
@@ -97,12 +100,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const initialLat = collars[0]?.currentLat || 42.8450;
-    const initialLng = collars[0]?.currentLng || -0.0150;
+    const initialLat = collars[0]?.currentLat || 42.9637;
+    const initialLng = collars[0]?.currentLng || 0.3829;
 
     const map = L.map(mapContainerRef.current, {
       center: [initialLat, initialLng],
-      zoom: 15,
+      zoom: 13,
       zoomControl: false,
     });
 
@@ -123,6 +126,29 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       mapRef.current = null;
     };
   }, []);
+
+  // À la première réception des colliers, cadrer automatiquement tout le troupeau
+  // visible avec un zoom adaptatif. Ce cadrage ne se répète pas à chaque mise à jour GPS.
+  useEffect(() => {
+    if (!mapRef.current || collars.length === 0 || initialFitDoneRef.current) return;
+
+    const visibleCollars = collars.filter(c => !hiddenCollarIds.includes(c.id));
+    const targetList = visibleCollars.length > 0 ? visibleCollars : collars;
+    const bounds = L.latLngBounds(targetList.map(c => [c.currentLat, c.currentLng] as [number, number]));
+
+    if (bounds.isValid()) {
+      mapRef.current.fitBounds(bounds, { padding: [55, 55], maxZoom: 16, animate: false });
+      initialFitDoneRef.current = true;
+    }
+  }, [collars, hiddenCollarIds]);
+
+  // Demande venant de « Créer un parcours » depuis Gestion des clôtures.
+  useEffect(() => {
+    if (!mapRef.current || startPatatoideRequest <= 0) return;
+    setIsDrawingPatatoide(true);
+    setDrawingPoints([]);
+    setIsSaveZoneModalOpen(false);
+  }, [startPatatoideRequest]);
 
   // Handle Map Clicks for Patatoïde Boundary Drawing
   useEffect(() => {
@@ -366,14 +392,34 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   };
 
   const handleRecenter = () => {
-    if (!mapRef.current || collars.length === 0) return;
-    if (selectedCollar) {
-      mapRef.current.panTo([selectedCollar.currentLat, selectedCollar.currentLng]);
-    } else {
-      const visibleCollars = collars.filter(c => !hiddenCollarIds.includes(c.id));
-      const targetList = visibleCollars.length > 0 ? visibleCollars : collars;
-      const bounds = L.latLngBounds(targetList.map(c => [c.currentLat, c.currentLng]));
-      mapRef.current.fitBounds(bounds, { padding: [60, 60] });
+    if (!mapRef.current) return;
+
+    // Sur un téléphone, la flèche demande la position GPS réelle de l'utilisateur.
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          mapRef.current?.panTo([latitude, longitude], { animate: true });
+        },
+        () => {
+          // Si la position est refusée/indisponible, on garde le comportement utile
+          // de secours : recentrer sur les colliers visibles sans changer le zoom plus que nécessaire.
+          const visibleCollars = collars.filter(c => !hiddenCollarIds.includes(c.id));
+          const targetList = visibleCollars.length > 0 ? visibleCollars : collars;
+          if (targetList.length === 0) return;
+          const bounds = L.latLngBounds(targetList.map(c => [c.currentLat, c.currentLng] as [number, number]));
+          mapRef.current?.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+      );
+      return;
+    }
+
+    const visibleCollars = collars.filter(c => !hiddenCollarIds.includes(c.id));
+    const targetList = visibleCollars.length > 0 ? visibleCollars : collars;
+    if (targetList.length > 0) {
+      const bounds = L.latLngBounds(targetList.map(c => [c.currentLat, c.currentLng] as [number, number]));
+      mapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
     }
   };
 

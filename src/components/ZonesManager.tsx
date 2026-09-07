@@ -8,6 +8,7 @@ interface ZonesManagerProps {
   onOpenAddZone: () => void;
   onEditZone: (zone: GeofenceZone) => void;
   onDeleteZone: (zoneId: string) => void;
+  onCreatePatatoide: () => void;
 }
 
 export const ZonesManager: React.FC<ZonesManagerProps> = ({
@@ -16,6 +17,7 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
   onOpenAddZone,
   onEditZone,
   onDeleteZone,
+  onCreatePatatoide,
 }) => {
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -32,13 +34,22 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenAddZone}
-          className="flex items-center justify-center space-x-2 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span>Créer une Clôture Virtuelle</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <button
+            onClick={onCreatePatatoide}
+            className="flex items-center justify-center space-x-2 bg-[#F2F4F1] hover:bg-[#E2E6DF] text-[#3E4A35] border border-[#C5D1C1] font-bold text-xs px-4 py-3 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#5A6F4E]" />
+            <span>Créer un parcours</span>
+          </button>
+          <button
+            onClick={onOpenAddZone}
+            className="flex items-center justify-center space-x-2 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Créer une Clôture Virtuelle</span>
+          </button>
+        </div>
       </div>
 
       {/* Grid of Geofence Zones */}

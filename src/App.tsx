@@ -42,6 +42,7 @@ export default function App() {
 
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
   const [isAlertsPopupOpen, setIsAlertsPopupOpen] = useState(false);
+  const [patatoideRequest, setPatatoideRequest] = useState(0);
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -344,6 +345,7 @@ export default function App() {
                   setIsPushModalOpen(true);
                 }}
                 onSaveZone={handleSaveZone}
+                startPatatoideRequest={patatoideRequest}
               />
             </div>
           )}
@@ -384,6 +386,10 @@ export default function App() {
                 setIsZoneModalOpen(true);
               }}
               onDeleteZone={handleDeleteZone}
+              onCreatePatatoide={() => {
+                setActiveTab('map');
+                setPatatoideRequest(prev => prev + 1);
+              }}
             />
           )}
 
