@@ -25,13 +25,15 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  const url = new URL(req.url || 'http://localhost/api');
-  return url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+  const raw = typeof req.url === 'string' && req.url ? req.url : '/api';
+  const pathname = raw.split('?')[0] || '/api';
+  return pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  const url = new URL(req.url || 'http://localhost/api');
-  return Object.fromEntries(url.searchParams.entries());
+  const raw = typeof req.url === 'string' && req.url ? req.url : '';
+  const queryString = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  return Object.fromEntries(new URLSearchParams(queryString).entries());
 }
 
 function signalQuality(signal: number | null | undefined) {
