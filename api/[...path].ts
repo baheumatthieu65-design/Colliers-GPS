@@ -25,12 +25,12 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  const url = new URL(req.url || '/api', 'http://localhost');
+  const url = new URL(req.url || 'http://localhost/api');
   return url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  const url = new URL(req.url || '/api', 'http://localhost');
+  const url = new URL(req.url || 'http://localhost/api');
   return Object.fromEntries(url.searchParams.entries());
 }
 
@@ -226,7 +226,23 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
     if (collarMatch && method === 'DELETE') {
       const id = collarMatch[1];
-      const { error: dbError } = await supabase.from('collars').delete().eq('id', id);
+
+      // Supprimer d'abord les affectations aux zones pour éviter
+      // une erreur de contrainte FK sur collar_zones.
+      const { error: linksError } = await supabase
+        .from('collar_zones')
+        .delete()
+        .eq('collar_id', id);
+
+      if (linksError) {
+        return error(res, 400, 'Impossible de supprimer les affectations du collier.', linksError.message);
+      }
+
+      const { error: dbError } = await supabase
+        .from('collars')
+        .delete()
+        .eq('id', id);
+
       if (dbError) return error(res, 400, 'Impossible de supprimer le collier.', dbError.message);
       return res.status(200).json({ success: true, id });
     }

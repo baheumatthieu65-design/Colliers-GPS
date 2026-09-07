@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Base plein écran pour la PWA */
 html,
@@ -29,7 +31,6 @@ textarea {
   touch-action: manipulation;
 }
 
-/* Sur téléphone : rendu PWA natif, sans cadre ni faux écran */
 @media (max-width: 767px) {
   html,
   body,
@@ -49,18 +50,15 @@ textarea {
     min-height: 100dvh !important;
   }
 
-  /* Le contenu de la PWA respire avec les zones système Android/iOS. */
   .paturgps-native-mobile {
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  /* Pas de marges ni d'effet "page web" autour de l'application. */
   .paturgps-native-mobile > div:first-child {
     width: 100%;
   }
 }
 
-/* Scrollbars discrètes pour les listes de l'application. */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
