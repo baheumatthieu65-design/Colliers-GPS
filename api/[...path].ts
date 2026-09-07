@@ -25,13 +25,35 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  const url = new URL(req.url || 'http://localhost/api');
-  return url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+  // Sur Vercel, req.url peut être relatif (ex: /api/collars).
+  // Ne jamais faire new URL(req.url) sans base : cela provoque TypeError: Invalid URL.
+  if (req.query && req.query.path !== undefined) {
+    const rawPath = Array.isArray(req.query.path)
+      ? req.query.path.join('/')
+      : String(req.query.path);
+    return rawPath.replace(/^\/api\/?/, '').replace(/^\/+|\/+$/g, '');
+  }
+
+  const rawUrl = String(req.url || '/api');
+  const pathOnly = rawUrl.split('?')[0];
+  return pathOnly.replace(/^\/api\/?/, '').replace(/^\/+|\/+$/g, '');
 }
 
 function getQuery(req: AnyReq) {
-  const url = new URL(req.url || 'http://localhost/api');
-  return Object.fromEntries(url.searchParams.entries());
+  const result: Record<string, string> = {};
+
+  if (req.query) {
+    for (const [key, value] of Object.entries(req.query)) {
+      if (key === 'path') continue;
+      if (Array.isArray(value)) result[key] = String(value[0] ?? '');
+      else if (value != null) result[key] = String(value);
+    }
+    return result;
+  }
+
+  const rawUrl = String(req.url || '');
+  const queryString = rawUrl.includes('?') ? rawUrl.slice(rawUrl.indexOf('?') + 1) : '';
+  return Object.fromEntries(new URLSearchParams(queryString).entries());
 }
 
 function signalQuality(signal: number | null | undefined) {
