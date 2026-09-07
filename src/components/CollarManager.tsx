@@ -75,7 +75,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-1 relative z-20 pointer-events-auto">
+                <div className="flex items-center gap-1.5 relative z-30 pointer-events-auto">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -83,11 +83,12 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                       e.stopPropagation();
                       onEditCollar(collar);
                     }}
-                    className="p-2 text-[#7D8A74] hover:text-[#2C3327] hover:bg-[#F2F4F1] rounded-lg transition-all cursor-pointer pointer-events-auto"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-[#5A6F4E] bg-[#F2F4F1] hover:bg-[#D8E0D5] border border-[#E2E6DF] rounded-lg transition-all cursor-pointer pointer-events-auto"
                     title="Modifier le collier"
                     aria-label={`Modifier ${collar.sheepName}`}
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Modifier</span>
                   </button>
 
                   <button
@@ -96,14 +97,15 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                       e.preventDefault();
                       e.stopPropagation();
                       if (window.confirm(`Voulez-vous vraiment supprimer le collier de ${collar.sheepName} (${collar.collarNumber}) ?`)) {
-                        onDeleteCollar(collar.id);
+                        void onDeleteCollar(collar.id);
                       }
                     }}
-                    className="p-2 text-[#7D8A74] hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer pointer-events-auto"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-all cursor-pointer pointer-events-auto"
                     title="Supprimer le collier"
                     aria-label={`Supprimer ${collar.sheepName}`}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Supprimer</span>
                   </button>
                 </div>
               </div>

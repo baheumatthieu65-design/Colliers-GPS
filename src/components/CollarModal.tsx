@@ -5,7 +5,7 @@ import { Radio, Palette, Check, X, Shield, Settings2, Smartphone, Cpu } from 'lu
 interface CollarModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (collarData: Partial<GPSCollar>) => Promise<boolean>;
+  onSave: (collarData: Partial<GPSCollar>) => Promise<boolean> | boolean;
   initialCollar?: GPSCollar | null;
   zones: GeofenceZone[];
 }
@@ -70,7 +70,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
     e.preventDefault();
     if (!sheepName.trim() || !collarNumber.trim()) return;
 
-    const success = await onSave({
+    const saved = await onSave({
       sheepName: sheepName.trim(),
       collarNumber: collarNumber.trim(),
       animalNumber: animalNumber.trim() || undefined,
@@ -84,7 +84,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
       notes: notes.trim() || undefined,
     });
 
-    if (success) onClose();
+    if (saved) onClose();
   };
 
   const inputClass =

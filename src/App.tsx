@@ -105,54 +105,57 @@ export default function App() {
   // Handlers for Collars
   const handleSaveCollar = async (collarData: Partial<GPSCollar>): Promise<boolean> => {
     try {
-      const url = editingCollar ? `/api/collars/${encodeURIComponent(editingCollar.id)}` : '/api/collars';
+      const isEdit = Boolean(editingCollar);
+      const url = isEdit ? `/api/collars/${editingCollar!.id}` : '/api/collars';
       const res = await fetch(url, {
-        method: editingCollar ? 'PUT' : 'POST',
+        method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(collarData),
       });
 
-      const payload = await res.json().catch(() => null);
+      const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         const message = payload?.details || payload?.error || `Erreur HTTP ${res.status}`;
-        console.error('Erreur API collier:', message, payload);
+        console.error('Erreur sauvegarde collier:', message);
         showNotification(`Erreur : ${message}`);
         return false;
       }
 
       showNotification(
-        editingCollar
-          ? `Collier de ${collarData.sheepName || editingCollar.sheepName} mis à jour avec succès.`
+        isEdit
+          ? `Collier de ${collarData.sheepName} mis à jour avec succès.`
           : `Nouveau collier pour ${collarData.sheepName} créé avec succès.`
       );
+      setEditingCollar(null);
       await fetchCollars();
       return true;
-    } catch (err) {
-      console.error('Error saving collar:', err);
-      showNotification('Erreur réseau : impossible de joindre le serveur.');
+    } catch (err: any) {
+      console.error('Erreur sauvegarde collier:', err);
+      showNotification(`Erreur : ${err?.message || 'impossible de sauvegarder le collier.'}`);
       return false;
     }
   };
 
-  const handleDeleteCollar = async (id: string): Promise<boolean> => {
+  const handleDeleteCollar = async (id: string) => {
     try {
-      const res = await fetch(`/api/collars/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      const payload = await res.json().catch(() => null);
-
+      const res = await fetch(`/api/collars/${id}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
         const message = payload?.details || payload?.error || `Erreur HTTP ${res.status}`;
-        console.error('Erreur suppression collier:', message, payload);
+        console.error('Erreur suppression collier:', message);
         showNotification(`Erreur : ${message}`);
-        return false;
+        return;
       }
 
+      if (editingCollar?.id === id) {
+        setEditingCollar(null);
+        setIsCollarModalOpen(false);
+      }
       showNotification('Collier supprimé du système.');
       await fetchCollars();
-      return true;
-    } catch (err) {
-      console.error('Error deleting collar:', err);
-      showNotification('Erreur réseau : impossible de supprimer le collier.');
-      return false;
+    } catch (err: any) {
+      console.error('Erreur suppression collier:', err);
+      showNotification(`Erreur : ${err?.message || 'impossible de supprimer le collier.'}`);
     }
   };
 

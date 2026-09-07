@@ -25,18 +25,13 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  // Vercel peut fournir req.url sous forme relative (/api/collars).
-  // On évite volontairement new URL() pour ne jamais provoquer
-  // "TypeError: Invalid URL" sur les fonctions serverless.
-  const raw = String(req.url || '/api');
-  const pathname = raw.split('?')[0] || '/api';
-  return pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+  const url = new URL(req.url || 'http://localhost/api');
+  return url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  const raw = String(req.url || '');
-  const queryString = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
-  return Object.fromEntries(new URLSearchParams(queryString).entries());
+  const url = new URL(req.url || 'http://localhost/api');
+  return Object.fromEntries(url.searchParams.entries());
 }
 
 function signalQuality(signal: number | null | undefined) {
@@ -206,27 +201,60 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (body.status !== undefined) updates.status = body.status;
       if (body.notes !== undefined) updates.notes = body.notes;
 
-      const { data, error: dbError } = await supabase
-        .from('collars')
-        .update(updates)
-        .eq('id', id)
-        .select('*')
-        .single();
+      if (Object.keys(updates).length === 0 && body.activeZoneId === undefined) {
+        return error(res, 400, 'Aucune modification à enregistrer.');
+      }
 
-      if (dbError) return error(res, 400, 'Impossible de modifier le collier.', dbError.message);
+      let data: any = null;
+      if (Object.keys(updates).length > 0) {
+        const result = await supabase
+          .from('collars')
+          .update(updates)
+          .eq('id', id)
+          .select('*')
+          .single();
 
+        if (result.error) {
+          return error(res, 400, 'Impossible de modifier le collier.', result.error.message);
+        }
+        data = result.data;
+      } else {
+        const result = await supabase.from('collars').select('*').eq('id', id).single();
+        if (result.error) return error(res, 404, 'Collier introuvable.', result.error.message);
+        data = result.data;
+      }
+
+      let activeZoneId: string | null | undefined = body.activeZoneId;
       if (body.activeZoneId !== undefined) {
-        await supabase.from('collar_zones').delete().eq('collar_id', id);
+        const { error: zoneDeleteError } = await supabase
+          .from('collar_zones')
+          .delete()
+          .eq('collar_id', id);
+        if (zoneDeleteError) {
+          return error(res, 400, 'Impossible de modifier la zone du collier.', zoneDeleteError.message);
+        }
+
         if (body.activeZoneId) {
-          await supabase.from('collar_zones').insert({
+          const { error: zoneInsertError } = await supabase.from('collar_zones').insert({
             collar_id: id,
             zone_id: body.activeZoneId,
             enabled: true,
           });
+          if (zoneInsertError) {
+            return error(res, 400, 'Impossible d’affecter la zone au collier.', zoneInsertError.message);
+          }
         }
+      } else {
+        const { data: zoneLink } = await supabase
+          .from('collar_zones')
+          .select('zone_id')
+          .eq('collar_id', id)
+          .limit(1)
+          .maybeSingle();
+        activeZoneId = zoneLink?.zone_id;
       }
 
-      return res.status(200).json(mapCollar(data, body.activeZoneId));
+      return res.status(200).json(mapCollar(data, activeZoneId));
     }
 
     if (collarMatch && method === 'DELETE') {
