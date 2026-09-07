@@ -6,7 +6,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
-    base: '/Colliers-GPS/',
+    base: process.env.VERCEL === '1' ? '/' : '/Colliers-GPS/',
     plugins: [
       react(),
       tailwindcss(),
