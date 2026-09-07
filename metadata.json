@@ -1,0 +1,6 @@
+{
+  "name": "Pâtur'GPS - Suivi Colliers Brebis",
+  "description": "Application de suivi GPS en temps réel pour colliers de brebis avec carte interactive, géofencing, alertes de franchissement, bouton Push haute fréquence et historique de parcours.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
