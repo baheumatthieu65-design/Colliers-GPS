@@ -1,1 +1,71 @@
 @import "tailwindcss";
+
+/* Base plein écran pour la PWA */
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+html {
+  background: #E8ECE5;
+}
+
+body {
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background: #E8ECE5;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* Sur téléphone : rendu PWA natif, sans cadre ni faux écran */
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    width: 100vw;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  .paturgps-shell,
+  .paturgps-native-mobile {
+    width: 100%;
+    min-height: 100dvh !important;
+  }
+
+  /* Le contenu de la PWA respire avec les zones système Android/iOS. */
+  .paturgps-native-mobile {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Pas de marges ni d'effet "page web" autour de l'application. */
+  .paturgps-native-mobile > div:first-child {
+    width: 100%;
+  }
+}
+
+/* Scrollbars discrètes pour les listes de l'application. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
