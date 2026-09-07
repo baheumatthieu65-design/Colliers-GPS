@@ -5,16 +5,16 @@
  * Usage:
  *   node scripts/download-offline-ortho.mjs
  *
- * Le niveau maximal est volontairement limité à 13 pour garder une taille
+ * Le niveau maximal est fixé à 16 pour une meilleure lisibilité tout en gardant une zone de 10 km
  * raisonnable sur un téléphone. La BD ORTHO est diffusée par l'IGN.
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const CENTER = { lat: 42.9200, lon: 0.3900 };
-const RADIUS_KM = 30;
+const CENTER = { lat: 42.9637, lon: 0.3829 };
+const RADIUS_KM = 10;
 const MIN_ZOOM = 8;
-const MAX_ZOOM = 13;
+const MAX_ZOOM = 16;
 const OUTPUT = path.resolve('public/offline-maps/ign-ortho');
 const CONCURRENCY = 8;
 

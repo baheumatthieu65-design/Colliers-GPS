@@ -4,13 +4,13 @@ La carte satellite de Pâtur'GPS utilise maintenant en priorité un paquet local
 
 ## Paramètres
 
-- Centre : Ilhet (65), environ `42.9200, 0.3900`
-- Rayon : 30 km
-- Zoom hors-ligne : 8 à 13
+- Centre : Ilhet (65), environ `42.9637, 0.3829`
+- Rayon : 10 km
+- Zoom hors-ligne : 8 à 16
 - Fond : BD ORTHO® IGN
 - Emplacement : `public/offline-maps/ign-ortho/{z}/{x}/{y}.jpg`
 
-Le choix du zoom maximal à 13 est volontaire : il limite fortement la taille du paquet tout en conservant un fond utile pour le suivi pastoral. Au-delà, Leaflet agrandit la dernière résolution disponible au lieu de télécharger des niveaux supplémentaires.
+Le zoom maximal à 16 apporte nettement plus de détail sur les chemins, clôtures et bâtiments, tout en limitant la zone hors-ligne à 10 km autour d’Ilhet. Au-delà du zoom 16, Leaflet agrandit la dernière résolution disponible au lieu de télécharger des niveaux supplémentaires.
 
 ## Constituer le paquet IGN
 

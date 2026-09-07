@@ -35,9 +35,9 @@ interface InteractiveMapProps {
 
 type MapTileStyle = 'satellite' | 'topo' | 'osm';
 
-const OFFLINE_ORTHO_MAX_ZOOM = 13;
-const OFFLINE_ORTHO_CENTER = { lat: 42.9200, lng: 0.3900 };
-const OFFLINE_ORTHO_RADIUS_KM = 30;
+const OFFLINE_ORTHO_MAX_ZOOM = 16;
+const OFFLINE_ORTHO_CENTER = { lat: 42.9637, lng: 0.3829 };
+const OFFLINE_ORTHO_RADIUS_KM = 10;
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   collars,
@@ -598,7 +598,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <span className={`inline-block w-2 h-2 rounded-full ${offlineOrthoAvailable ? 'bg-emerald-400' : 'bg-amber-400'}`} />
               Orthophoto IGN hors-ligne
             </div>
-            <div className="text-white/75 mt-0.5">Ilhet · rayon 30 km · détail limité au zoom 13</div>
+            <div className="text-white/75 mt-0.5">Ilhet · rayon 10 km · haute définition jusqu’au zoom 16</div>
           </div>
         </div>
       )}
