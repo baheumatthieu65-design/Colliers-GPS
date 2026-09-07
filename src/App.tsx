@@ -15,7 +15,6 @@ import { GeofenceModal } from './components/GeofenceModal';
 import { AlertsTable } from './components/AlertsTable';
 import { TrackHistory } from './components/TrackHistory';
 import { MobileBottomNav } from './components/MobileBottomNav';
-import { SmartphoneFrame } from './components/SmartphoneFrame';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Radio, ShieldAlert, Zap, Compass, CheckCircle2, Bell as BellIcon } from 'lucide-react';
 
@@ -284,17 +283,44 @@ export default function App() {
     }
   };
 
+  // Sécurité des actions collier : capture native au niveau document.
+  // Cela évite qu'un conteneur/une couche responsive intercepte le clic avant React.
+  useEffect(() => {
+    const onDocumentClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest('button[data-collar-action]') as HTMLButtonElement | null;
+      if (!button) return;
+
+      const collarId = button.dataset.collarId;
+      const action = button.dataset.collarAction;
+      if (!collarId || !action) return;
+
+      const collar = collars.find((item) => item.id === collarId);
+      if (!collar) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (action === 'edit') {
+        console.log('[PaturGPS] NATIVE EDIT', collar.id);
+        setEditingCollar(collar);
+        setIsCollarModalOpen(true);
+      }
+
+      if (action === 'delete') {
+        console.log('[PaturGPS] NATIVE DELETE', collar.id);
+        void handleDeleteCollar(collar.id);
+      }
+    };
+
+    document.addEventListener('click', onDocumentClick, true);
+    return () => document.removeEventListener('click', onDocumentClick, true);
+  }, [collars, handleDeleteCollar]);
+
   const activeAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
 
   return (
-    <SmartphoneFrame
-      onOpenPushModal={() => {
-        setPushModalCollarId(null);
-        setIsPushModalOpen(true);
-      }}
-      activeAlertsCount={activeAlertsCount}
-    >
-      <div className="min-h-screen bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative">
+    <div className="min-h-screen bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative">
         
         {/* Offline Indicator Toast */}
         <OfflineIndicator />
@@ -517,7 +543,6 @@ export default function App() {
           </div>
         </footer>
 
-      </div>
-    </SmartphoneFrame>
+    </div>
   );
 }
