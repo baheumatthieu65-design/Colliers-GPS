@@ -35,8 +35,29 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
     await onDeleteCollar(collar.id);
   };
 
+  // Capture au niveau du conteneur : fonctionne même si l'icône SVG reçoit le clic.
+  const handleActionCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const button = target.closest('button[data-collar-action]') as HTMLButtonElement | null;
+    if (!button) return;
+    const action = button.dataset.collarAction;
+    const collarId = button.dataset.collarId;
+    if (!collarId) return;
+    const collar = collars.find((item) => item.id === collarId);
+    if (!collar) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (action === 'edit') {
+      console.log('[PaturGPS] CAPTURE EDIT', collar.id);
+      onEditCollar(collar);
+    } else if (action === 'delete') {
+      console.log('[PaturGPS] CAPTURE DELETE', collar.id);
+      void handleDelete(collar);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onClickCapture={handleActionCapture}>
       <div className="bg-white border border-[#E2E6DF] p-6 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-[#3E4A35] flex items-center space-x-2">
@@ -93,6 +114,8 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                     <button
                       type="button"
                       title="Modifier le collier"
+                      data-collar-action="edit"
+                      data-collar-id={collar.id}
                       aria-label={`Modifier ${collar.sheepName}`}
                       onPointerDown={(e) => {
                         e.stopPropagation();
@@ -111,6 +134,8 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                     <button
                       type="button"
                       title="Supprimer le collier"
+                      data-collar-action="delete"
+                      data-collar-id={collar.id}
                       aria-label={`Supprimer ${collar.sheepName}`}
                       onPointerDown={(e) => {
                         e.stopPropagation();
