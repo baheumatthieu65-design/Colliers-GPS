@@ -25,32 +25,13 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  const raw = req.query?.path;
-  if (Array.isArray(raw)) return raw.join('/').replace(/^\/+|\/+$/g, '');
-  if (typeof raw === 'string' && raw) return raw.replace(/^\/+|\/+$/g, '');
-
-  const rawUrl = req.url || '';
-  const pathname = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
-    ? new URL(rawUrl).pathname
-    : rawUrl.split('?')[0];
-  return pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+  const url = new URL(req.url || 'http://localhost/api');
+  return url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
 }
 
 function getQuery(req: AnyReq) {
-  if (req.query) {
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(req.query)) {
-      if (key === 'path') continue;
-      if (Array.isArray(value)) out[key] = value[0] ?? '';
-      else if (value != null) out[key] = String(value);
-    }
-    return out;
-  }
-
-  const rawUrl = req.url || '';
-  if (!rawUrl) return {};
-  const queryString = rawUrl.includes('?') ? rawUrl.slice(rawUrl.indexOf('?') + 1) : '';
-  return Object.fromEntries(new URLSearchParams(queryString).entries());
+  const url = new URL(req.url || 'http://localhost/api');
+  return Object.fromEntries(url.searchParams.entries());
 }
 
 function signalQuality(signal: number | null | undefined) {
@@ -84,6 +65,9 @@ function mapCollar(row: any, assignedZoneId?: string | null) {
     iccid: row.iccid || undefined,
     simPhone: row.sim_phone || undefined,
     mode: row.mode,
+    status: row.status,
+    animalNumber: row.animal_number || undefined,
+    notes: row.notes || undefined,
   };
 }
 
@@ -103,9 +87,25 @@ function mapZone(row: any, assignedCollarIds: string[] = []) {
   };
 }
 
+function normalizeError(details: any) {
+  if (details == null) return null;
+  if (typeof details === 'string') return details;
+  return {
+    message: details.message || String(details),
+    code: details.code || undefined,
+    details: details.details || undefined,
+    hint: details.hint || undefined,
+  };
+}
+
 function error(res: AnyRes, status: number, message: string, details?: any) {
-  console.error(message, details || '');
-  return res.status(status).json({ error: message, details });
+  const normalized = normalizeError(details);
+  console.error('[PaturGPS API]', message, normalized || '');
+  return res.status(status).json({
+    ok: false,
+    error: message,
+    details: normalized,
+  });
 }
 
 export default async function handler(req: AnyReq, res: AnyRes) {
@@ -220,10 +220,6 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (body.status !== undefined) updates.status = body.status;
       if (body.notes !== undefined) updates.notes = body.notes;
 
-      if (Object.keys(updates).length === 0) {
-        return error(res, 400, 'Aucune modification à enregistrer.');
-      }
-
       const { data, error: dbError } = await supabase
         .from('collars')
         .update(updates)
@@ -234,15 +230,13 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (dbError) return error(res, 400, 'Impossible de modifier le collier.', dbError.message);
 
       if (body.activeZoneId !== undefined) {
-        const { error: zoneDeleteError } = await supabase.from('collar_zones').delete().eq('collar_id', id);
-        if (zoneDeleteError) return error(res, 400, 'Impossible de modifier l’affectation à la zone.', zoneDeleteError.message);
+        await supabase.from('collar_zones').delete().eq('collar_id', id);
         if (body.activeZoneId) {
-          const { error: zoneInsertError } = await supabase.from('collar_zones').insert({
+          await supabase.from('collar_zones').insert({
             collar_id: id,
             zone_id: body.activeZoneId,
             enabled: true,
           });
-          if (zoneInsertError) return error(res, 400, 'Impossible d’affecter le collier à la zone.', zoneInsertError.message);
         }
       }
 
@@ -252,24 +246,43 @@ export default async function handler(req: AnyReq, res: AnyRes) {
     if (collarMatch && method === 'DELETE') {
       const id = collarMatch[1];
 
-      // Supprimer d'abord les affectations aux zones pour éviter
-      // une erreur de contrainte FK sur collar_zones.
-      const { error: linksError } = await supabase
-        .from('collar_zones')
-        .delete()
-        .eq('collar_id', id);
+      // Nettoyage explicite des tables dépendantes.
+      // On ne dépend plus d'un éventuel ON DELETE CASCADE de la BDD.
+      const dependentTables = [
+        'command_targets',
+        'device_events',
+        'positions',
+        'alerts',
+        'push_subscriptions',
+        'collar_zones',
+      ];
 
-      if (linksError) {
-        return error(res, 400, 'Impossible de supprimer les affectations du collier.', linksError.message);
+      for (const table of dependentTables) {
+        const { error: depError } = await supabase
+          .from(table)
+          .delete()
+          .eq('collar_id', id);
+        if (depError) {
+          return error(
+            res,
+            400,
+            `Impossible de supprimer les données liées du collier (${table}).`,
+            depError
+          );
+        }
       }
 
-      const { error: dbError } = await supabase
+      const { data: deleted, error: dbError } = await supabase
         .from('collars')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select('id')
+        .maybeSingle();
 
-      if (dbError) return error(res, 400, 'Impossible de supprimer le collier.', dbError.message);
-      return res.status(200).json({ success: true, id });
+      if (dbError) return error(res, 400, 'Impossible de supprimer le collier.', dbError);
+      if (!deleted) return error(res, 404, 'Collier introuvable.', { id });
+
+      return res.status(200).json({ ok: true, success: true, id });
     }
 
     // ---------------- ZONES ----------------
@@ -559,6 +572,6 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
     return error(res, 404, `Route API inconnue : /api/${path}`);
   } catch (e: any) {
-    return error(res, 500, 'Erreur serveur Pâtur’GPS.', e?.message || e);
+    return error(res, 500, 'Erreur serveur Pâtur’GPS.', e);
   }
 }
