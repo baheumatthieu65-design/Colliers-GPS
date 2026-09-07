@@ -6,6 +6,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: '/Colliers-GPS/',
     plugins: [
       react(),
       tailwindcss(),
@@ -13,7 +14,7 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
-          id: '/',
+          id: '/Colliers-GPS/',
           name: "Pâtur'GPS - Suivi Brebis & Clôtures",
           short_name: "Pâtur'GPS",
           description: "Application mobile de suivi GPS pastorale pour colliers de brebis avec carte interactive, géofencing et ordres Push.",
@@ -21,23 +22,23 @@ export default defineConfig(() => {
           background_color: '#F2F4F1',
           display: 'standalone',
           orientation: 'portrait',
-          start_url: '/',
-          scope: '/',
+          start_url: '/Colliers-GPS/',
+          scope: '/Colliers-GPS/',
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: '/Colliers-GPS/pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-512x512.png',
+              src: '/Colliers-GPS/pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: '/Colliers-GPS/pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
