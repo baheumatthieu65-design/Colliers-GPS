@@ -75,7 +75,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-1 relative z-20 pointer-events-auto">
+                <div className="flex items-center gap-1 relative z-[60] pointer-events-auto isolate">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -83,7 +83,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                       e.stopPropagation();
                       onEditCollar(collar);
                     }}
-                    className="p-2 text-[#7D8A74] hover:text-[#2C3327] hover:bg-[#F2F4F1] rounded-lg transition-all cursor-pointer pointer-events-auto"
+                    className="p-2.5 min-w-10 min-h-10 flex items-center justify-center text-[#7D8A74] hover:text-[#2C3327] hover:bg-[#F2F4F1] rounded-lg transition-all cursor-pointer pointer-events-auto touch-manipulation"
                     title="Modifier le collier"
                     aria-label={`Modifier ${collar.sheepName}`}
                   >
@@ -99,7 +99,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                         onDeleteCollar(collar.id);
                       }
                     }}
-                    className="p-2 text-[#7D8A74] hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer pointer-events-auto"
+                    className="p-2.5 min-w-10 min-h-10 flex items-center justify-center text-[#7D8A74] hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer pointer-events-auto touch-manipulation"
                     title="Supprimer le collier"
                     aria-label={`Supprimer ${collar.sheepName}`}
                   >

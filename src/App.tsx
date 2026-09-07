@@ -103,63 +103,62 @@ export default function App() {
   }, [fetchCollars, fetchZones, fetchAlerts]);
 
   // Handlers for Collars
-  const readApiError = async (res: Response) => {
-    try {
-      const payload = await res.json();
-      return payload?.details || payload?.error || `Erreur HTTP ${res.status}`;
-    } catch {
-      return `Erreur HTTP ${res.status}`;
-    }
-  };
-
   const handleSaveCollar = async (collarData: Partial<GPSCollar>): Promise<boolean> => {
     try {
-      const isEdit = Boolean(editingCollar?.id);
-      const url = isEdit ? `/api/collars/${encodeURIComponent(editingCollar!.id)}` : '/api/collars';
-      const res = await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const isEditing = Boolean(editingCollar?.id);
+      const endpoint = isEditing
+        ? `/api/collars/${encodeURIComponent(editingCollar!.id)}`
+        : '/api/collars';
+
+      const res = await fetch(endpoint, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify(collarData),
       });
 
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const message = await readApiError(res);
-        console.error('Collier API error:', res.status, message);
-        showNotification(`Échec : ${message}`);
-        return false;
+        throw new Error(data?.details || data?.error || data?.message || `Erreur HTTP ${res.status}`);
       }
 
-      showNotification(
-        isEdit
-          ? `Collier de ${collarData.sheepName || 'la brebis'} mis à jour avec succès.`
-          : `Nouveau collier pour ${collarData.sheepName || 'la brebis'} créé avec succès.`
-      );
       await fetchCollars();
+      showNotification(
+        isEditing
+          ? `Collier de ${collarData.sheepName || editingCollar?.sheepName || ''} mis à jour avec succès.`
+          : `Nouveau collier pour ${collarData.sheepName || ''} créé avec succès.`
+      );
       return true;
     } catch (err: any) {
       console.error('Error saving collar:', err);
-      showNotification(`Échec : ${err?.message || 'impossible de contacter le serveur.'}`);
+      showNotification(`Erreur : ${err?.message || 'Impossible d’enregistrer le collier.'}`);
       return false;
     }
   };
 
   const handleDeleteCollar = async (id: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/collars/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/collars/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const message = await readApiError(res);
-        console.error('Collier delete API error:', res.status, message);
-        showNotification(`Échec suppression : ${message}`);
-        return false;
+        throw new Error(data?.details || data?.error || data?.message || `Erreur HTTP ${res.status}`);
       }
 
-      showNotification('Collier supprimé du système.');
+      if (editingCollar?.id === id) {
+        setEditingCollar(null);
+        setIsCollarModalOpen(false);
+      }
       if (selectedCollarId === id) setSelectedCollarId(null);
       await fetchCollars();
+      showNotification('Collier supprimé du système.');
       return true;
     } catch (err: any) {
       console.error('Error deleting collar:', err);
-      showNotification(`Échec suppression : ${err?.message || 'impossible de contacter le serveur.'}`);
+      showNotification(`Erreur : ${err?.message || 'Impossible de supprimer le collier.'}`);
       return false;
     }
   };

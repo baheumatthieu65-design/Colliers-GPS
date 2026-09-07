@@ -41,7 +41,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   const [mode, setMode] = useState<'simulation' | 'real'>('simulation');
   const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>('active');
   const [notes, setNotes] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -69,25 +69,28 @@ export const CollarModal: React.FC<CollarModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving || !sheepName.trim() || !collarNumber.trim()) return;
+    if (!sheepName.trim() || !collarNumber.trim() || saving) return;
 
-    setIsSaving(true);
-    const success = await onSave({
-      sheepName: sheepName.trim(),
-      collarNumber: collarNumber.trim(),
-      animalNumber: animalNumber.trim() || undefined,
-      color,
-      activeZoneId: activeZoneId || undefined,
-      imei: imei.trim() || undefined,
-      iccid: iccid.trim() || undefined,
-      simPhone: simPhone.trim() || undefined,
-      mode,
-      status,
-      notes: notes.trim() || undefined,
-    });
+    setSaving(true);
+    try {
+      const saved = await onSave({
+        sheepName: sheepName.trim(),
+        collarNumber: collarNumber.trim(),
+        animalNumber: animalNumber.trim() || undefined,
+        color,
+        activeZoneId: activeZoneId || undefined,
+        imei: imei.trim() || undefined,
+        iccid: iccid.trim() || undefined,
+        simPhone: simPhone.trim() || undefined,
+        mode,
+        status,
+        notes: notes.trim() || undefined,
+      });
 
-    setIsSaving(false);
-    if (success) onClose();
+      if (saved) onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const inputClass =
@@ -302,10 +305,9 @@ export const CollarModal: React.FC<CollarModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSaving}
-              className="px-5 py-2.5 bg-[#5A6F4E] hover:bg-[#4A5E3E] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+              className="px-5 py-2.5 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
             >
-              {isSaving ? 'Enregistrement...' : initialCollar ? 'Enregistrer Modifications' : 'Créer le Collier'}
+              {saving ? 'Enregistrement…' : initialCollar ? 'Enregistrer Modifications' : 'Créer le Collier'}
             </button>
           </div>
         </form>
