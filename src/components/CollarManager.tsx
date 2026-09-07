@@ -75,15 +75,16 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 relative z-30 pointer-events-auto">
+                <div className="flex items-center gap-1 relative z-30 pointer-events-auto">
                   <button
                     type="button"
+                    onPointerDown={(e) => { e.stopPropagation(); }}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       onEditCollar(collar);
                     }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-[#5A6F4E] bg-[#F2F4F1] hover:bg-[#D8E0D5] border border-[#E2E6DF] rounded-lg transition-all cursor-pointer pointer-events-auto"
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-[#3E4A35] bg-[#F2F4F1] hover:bg-[#D8E0D5] border border-[#C5D1C1] rounded-lg cursor-pointer pointer-events-auto touch-manipulation"
                     title="Modifier le collier"
                     aria-label={`Modifier ${collar.sheepName}`}
                   >
@@ -93,14 +94,15 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
 
                   <button
                     type="button"
+                    onPointerDown={(e) => { e.stopPropagation(); }}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       if (window.confirm(`Voulez-vous vraiment supprimer le collier de ${collar.sheepName} (${collar.collarNumber}) ?`)) {
-                        void onDeleteCollar(collar.id);
+                        onDeleteCollar(collar.id);
                       }
                     }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-all cursor-pointer pointer-events-auto"
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg cursor-pointer pointer-events-auto touch-manipulation"
                     title="Supprimer le collier"
                     aria-label={`Supprimer ${collar.sheepName}`}
                   >
