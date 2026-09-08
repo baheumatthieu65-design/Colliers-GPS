@@ -11,6 +11,17 @@
       "activeZoneId": "d1a147d0-f87d-4cc9-aede-04bbb41c7f67",
       "animalNumber": "D52321",
       "baseTransmissionMinutes": 60
+    },
+    {
+      "id": "57832464-afc5-428a-b938-b457bdbec268",
+      "sheepName": "Test",
+      "collarNumber": "COL-426",
+      "animalNumber": "44544",
+      "color": "#10B981",
+      "mode": "simulation",
+      "status": "active",
+      "activeZoneId": "6db4ea95-c17a-47f5-92d6-5c66e2892c0f",
+      "baseTransmissionMinutes": 30
     }
   ]
 }
