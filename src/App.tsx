@@ -182,25 +182,26 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ collarIds, durationMinutes, intervalSeconds }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        showNotification(data.message || 'Ordre PUSH activé.');
-        fetchCollars();
-      }
-    } catch (err) {
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(formatApiError(data, res.status));
+      showNotification(data?.message || 'Ordre PUSH mis en file pour le prochain réveil.');
+      await fetchCollars();
+    } catch (err: any) {
       console.error('Error sending push order:', err);
+      showNotification(`Erreur PUSH : ${err?.message || 'Impossible de créer la commande.'}`);
     }
   };
 
   const handleStopPushForCollar = async (id: string) => {
     try {
       const res = await fetch(`/api/collars/${id}/push`, { method: 'DELETE' });
-      if (res.ok) {
-        showNotification('Mode PUSH arrêté. Retour au rythme standard (30 min).');
-        fetchCollars();
-      }
-    } catch (err) {
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(formatApiError(data, res.status));
+      showNotification('Arrêt PUSH mis en file pour le prochain réveil.');
+      await fetchCollars();
+    } catch (err: any) {
       console.error('Error stopping push:', err);
+      showNotification(`Erreur : ${err?.message || 'Impossible d’arrêter le PUSH.'}`);
     }
   };
 
