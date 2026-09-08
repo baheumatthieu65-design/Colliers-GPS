@@ -9,7 +9,9 @@ self.addEventListener('push', event => {
     badge: './pwa-192x192.png',
     data: { url: data.url || './' },
     requireInteraction: danger || data.requireInteraction === true,
-    vibrate: danger ? [700, 200, 700, 200, 1200] : [250, 150, 250]
+    renotify: danger,
+    silent: danger ? false : true,
+    vibrate: danger ? [1000, 500, 1000, 500, 1000, 500, 1500] : [180]
   }));
 });
 self.addEventListener('notificationclick', event => {
