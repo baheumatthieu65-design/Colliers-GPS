@@ -9,15 +9,6 @@
       "mode": "simulation",
       "status": "active",
       "activeZoneId": null
-    },
-    {
-      "id": "64772cbc-8a17-407d-8b93-89337d2666d0",
-      "sheepName": "test",
-      "collarNumber": "COL-836",
-      "color": "#EF4444",
-      "mode": "simulation",
-      "status": "active",
-      "activeZoneId": null
     }
   ]
 }
