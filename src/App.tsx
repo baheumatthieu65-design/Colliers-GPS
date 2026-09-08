@@ -17,6 +17,7 @@ import { TrackHistory } from './components/TrackHistory';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Radio, ShieldAlert, Zap, Compass, CheckCircle2, Bell as BellIcon } from 'lucide-react';
+import { PWAInstallButton } from './components/PWAInstallButton';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'map' | 'collars' | 'zones' | 'alerts' | 'history'>('map');
@@ -399,6 +400,11 @@ export default function App() {
           onTriggerSimulatedAlert={handleTriggerSimulatedAlert}
           onOpenAlerts={() => setIsAlertsPopupOpen(true)}
         />
+
+        {/* PWA installation shortcut */}
+        <div className="fixed right-3 bottom-20 md:bottom-4 z-[60]">
+          <PWAInstallButton compact />
+        </div>
 
         {/* Main Application Canvas View */}
         <main className={`flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 pb-20 md:pb-4 ${activeTab === 'map' ? 'space-y-2 overflow-hidden' : 'space-y-2 sm:space-y-3'}`}>
