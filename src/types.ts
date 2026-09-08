@@ -1,3 +1,9 @@
+/** Identifiant court affichable, dérivé de l'identifiant interne immuable. */
+export function shortId(id: string | null | undefined, length = 10): string {
+  if (!id) return '';
+  return id.replace(/[^a-zA-Z0-9]/g, '').slice(0, length);
+}
+
 export interface PushModeConfig {
   active: boolean;
   intervalSeconds: number;
