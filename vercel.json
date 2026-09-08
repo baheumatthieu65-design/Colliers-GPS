@@ -6,6 +6,9 @@
     {"source":"/api/push-config","destination":"/api/push-config.ts"},
     {"source":"/api/push-subscribe","destination":"/api/push-subscribe.ts"},
     {"source":"/api/push-alert","destination":"/api/push-alert.ts"},
+    {"source":"/api/push-danger","destination":"/api/push-danger.ts"},
+    {"source":"/api/collar-danger","destination":"/api/collar-danger.ts"},
+    {"source":"/api/danger","destination":"/api/danger.ts"},
     {"source":"/api/(.*)","destination":"/api/[...path].ts"}
   ]
 }

@@ -43,6 +43,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   const [notes, setNotes] = useState('');
   const [baseTransmissionValue, setBaseTransmissionValue] = useState<string>('30');
   const [baseTransmissionUnit, setBaseTransmissionUnit] = useState<'minutes' | 'heures'>('minutes');
+  const [dangerActive, setDangerActive] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -72,6 +73,13 @@ export const CollarModal: React.FC<CollarModalProps> = ({
     } else {
       setBaseTransmissionValue(String(baseMinutes));
       setBaseTransmissionUnit('minutes');
+    }
+    setDangerActive(false);
+    if (initialCollar?.collarNumber) {
+      fetch(`/api/collar-danger?collarNumber=${encodeURIComponent(initialCollar.collarNumber)}`, { cache: 'no-store' })
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => setDangerActive(Boolean(data?.dangerActive)))
+        .catch(() => setDangerActive(false));
     }
   }, [isOpen, initialCollar, zones]);
 
@@ -103,7 +111,14 @@ export const CollarModal: React.FC<CollarModalProps> = ({
         baseTransmissionMinutes,
       });
 
-      if (saved) onClose();
+      if (saved) {
+        await fetch('/api/collar-danger', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collarNumber: collarNumber.trim(), dangerActive }),
+        });
+        onClose();
+      }
     } finally {
       setSaving(false);
     }
@@ -295,6 +310,26 @@ export const CollarModal: React.FC<CollarModalProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="bg-[#FFF7ED] border border-[#FED7AA] rounded-xl p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <label className={`${labelClass} mb-0 flex items-center space-x-1`}>
+                  <Shield className="w-3.5 h-3.5 text-[#C2410C]" />
+                  <span>Danger actif</span>
+                </label>
+                <p className="text-[10px] text-[#9A3412] mt-1">Une donnée dans la colonne DANGER déclenche une notification.</p>
+              </div>
+              <select
+                value={dangerActive ? 'oui' : 'non'}
+                onChange={(e) => setDangerActive(e.target.value === 'oui')}
+                className={`${inputClass} w-auto min-w-[100px]`}
+              >
+                <option value="non">Non</option>
+                <option value="oui">Oui</option>
+              </select>
+            </div>
           </div>
 
           <div className="bg-[#F2F4F1] border border-[#E2E6DF] rounded-xl p-3">

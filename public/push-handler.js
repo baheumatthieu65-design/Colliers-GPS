@@ -1,13 +1,15 @@
 self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) { data = { body: event.data ? event.data.text() : '' }; }
+  const danger = data.kind === 'danger' || String(data.title || '').includes('DANGER');
   event.waitUntil(self.registration.showNotification(data.title || "Pâtur'GPS", {
     body: data.body || 'Nouvelle alerte',
     tag: data.tag || 'paturgps-alert',
     icon: './pwa-192x192.png',
     badge: './pwa-192x192.png',
     data: { url: data.url || './' },
-    requireInteraction: true
+    requireInteraction: danger || data.requireInteraction === true,
+    vibrate: danger ? [700, 200, 700, 200, 1200] : [250, 150, 250]
   }));
 });
 self.addEventListener('notificationclick', event => {
