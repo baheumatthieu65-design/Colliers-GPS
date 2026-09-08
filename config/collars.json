@@ -1,4 +1,15 @@
 {
   "version": 1,
-  "collars": []
+  "collars": [
+    {
+      "id": "c03023fc-7ac7-41af-b9a0-aede01dc39b2",
+      "sheepName": "Test",
+      "collarNumber": "COL-727",
+      "animalNumber": "542",
+      "color": "#64748B",
+      "mode": "simulation",
+      "status": "active",
+      "activeZoneId": null
+    }
+  ]
 }
