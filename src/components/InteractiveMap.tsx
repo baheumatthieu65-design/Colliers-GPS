@@ -260,7 +260,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const map = mapRef.current;
       if (!map || !isValidCoordinate(lat) || !isValidCoordinate(lng)) return;
       if (typeof heading === 'number' && Number.isFinite(heading)) userHeadingRef.current = heading;
-      const rotation = userHeadingRef.current ?? 0;
+      const rotation = ((userHeadingRef.current ?? 0) + 180) % 360;
       const html = `
         <div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
           <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 100%;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #1677ff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));"></div>
@@ -281,71 +281,20 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
 
-    // Orientation du téléphone : on utilise une seule source à la fois et
-    // un lissage circulaire pour éviter les sauts/clignotements du compas.
-    let orientationSource: 'absolute' | 'relative' | null = null;
-    let smoothedHeading: number | null = userHeadingRef.current;
-    let lastOrientationUpdate = 0;
-
-    const circularDifference = (from: number, to: number) => {
-      return ((to - from + 540) % 360) - 180;
-    };
-
     const onOrientation = (event: DeviceOrientationEvent) => {
-      // Les événements absolus sont traités uniquement par le listener dédié.
-      if (event.absolute === true) return;
-      const now = performance.now();
-      if (now - lastOrientationUpdate < 80) return;
-
-      let heading: number | null = null;
-      const webkitHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
-
-      // iOS fournit directement le cap magnétique en degrés.
-      if (typeof webkitHeading === 'number' && Number.isFinite(webkitHeading)) {
-        heading = webkitHeading;
-        orientationSource = 'absolute';
-      } else if (event.absolute === true && typeof event.alpha === 'number' && Number.isFinite(event.alpha)) {
-        // Pour un événement absolu Android, alpha augmente dans le sens
-        // horaire : le cap de la partie haute du téléphone est 360 - alpha.
-        heading = (360 - event.alpha) % 360;
-        orientationSource = 'absolute';
-      } else if (typeof event.alpha === 'number' && Number.isFinite(event.alpha)) {
-        // Repli uniquement si aucun flux absolu n'est disponible.
-        heading = (360 - event.alpha) % 360;
-        orientationSource = 'relative';
-      }
-
-      if (heading === null) return;
-
-      // Lissage circulaire : 15 % du nouvel angle seulement.
-      if (smoothedHeading === null) {
-        smoothedHeading = heading;
-      } else {
-        smoothedHeading = (smoothedHeading + circularDifference(smoothedHeading, heading) * 0.15 + 360) % 360;
-      }
-
-      lastOrientationUpdate = now;
-      const stableHeading = smoothedHeading;
-      userHeadingRef.current = stableHeading;
-
+      const alpha = typeof event.alpha === 'number' ? event.alpha : null;
+      if (alpha === null) return;
+      const heading = (360 - alpha) % 360;
+      userHeadingRef.current = heading;
       const marker = userLocationMarkerRef.current;
       if (!marker) return;
       const pos = marker.getLatLng();
-      updateUserMarker(pos.lat, pos.lng, stableHeading);
+      updateUserMarker(pos.lat, pos.lng, heading);
     };
-
-    const onAbsoluteOrientation = (event: DeviceOrientationEvent) => {
-      if (event.absolute !== true) return;
-      onOrientation(event);
-    };
-
-    // Un seul flux : absolu en priorité. Le flux classique sert de repli.
-    window.addEventListener('deviceorientationabsolute', onAbsoluteOrientation as EventListener, true);
     window.addEventListener('deviceorientation', onOrientation, true);
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
-      window.removeEventListener('deviceorientationabsolute', onOrientation as EventListener, true);
       window.removeEventListener('deviceorientation', onOrientation, true);
       if (userLocationMarkerRef.current) {
         userLocationMarkerRef.current.remove();
