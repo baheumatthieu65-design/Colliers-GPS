@@ -1,4 +1,15 @@
 {
   "version": 1,
-  "collars": []
+  "collars": [
+    {
+      "id": "ff843b96-8b9d-46e8-95bb-253e40f94d97",
+      "sheepName": "Fanny",
+      "collarNumber": "COL-1",
+      "color": "#EF4444",
+      "mode": "simulation",
+      "status": "active",
+      "activeZoneId": "6db4ea95-c17a-47f5-92d6-5c66e2892c0f",
+      "baseTransmissionMinutes": 30
+    }
+  ]
 }
