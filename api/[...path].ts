@@ -51,17 +51,47 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  // Sur Vercel, req.url peut être relatif (ex: /api/collars).
+  // Sur Vercel, le paramètre query.path d'une route [...path] peut ne contenir
+  // qu'une partie du chemin selon le runtime. Pour les routes dynamiques
+  // (/api/collars/:id), la source la plus fiable est donc req.url.
+  const rawUrl = String(req.url || '');
+  let pathOnly = rawUrl.split('?')[0];
+
+  // Si req.url est une URL absolue, récupérer uniquement son pathname.
+  if (/^https?:\/\//i.test(pathOnly)) {
+    try {
+      pathOnly = new URL(pathOnly).pathname;
+    } catch {
+      // On retombe sur le parsing classique ci-dessous.
+    }
+  }
+
+  const fromUrl = pathOnly
+    .replace(/^\/?api\/?/, '')
+    .replace(/^\/+|\/+$/g, '');
+
+  if (fromUrl) {
+    try {
+      return decodeURIComponent(fromUrl);
+    } catch {
+      return fromUrl;
+    }
+  }
+
+  // Fallback pour les environnements où req.url n'est pas renseigné.
   if (req.query && req.query.path !== undefined) {
     const rawPath = Array.isArray(req.query.path)
       ? req.query.path.join('/')
       : String(req.query.path);
-    return rawPath.replace(/^\/?api\/?/, '').replace(/^\/+|\/+$/g, '');
+    const cleaned = rawPath.replace(/^\/?api\/?/, '').replace(/^\/+|\/+$/g, '');
+    try {
+      return decodeURIComponent(cleaned);
+    } catch {
+      return cleaned;
+    }
   }
 
-  const rawUrl = String(req.url || '/api');
-  const pathOnly = rawUrl.split('?')[0];
-  return pathOnly.replace(/^\/?api\/?/, '').replace(/^\/+|\/+$/g, '');
+  return '';
 }
 
 function getQuery(req: AnyReq) {
