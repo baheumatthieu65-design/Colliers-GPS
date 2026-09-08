@@ -284,17 +284,22 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const onOrientation = (event: DeviceOrientationEvent) => {
       const alpha = typeof event.alpha === 'number' ? event.alpha : null;
       if (alpha === null) return;
-      const heading = (360 - alpha) % 360;
+      // Alpha is clockwise from north on the absolute orientation event.
+      // The previous 360-alpha formula inverted east/west and flipped south to north.
+      const screenAngle = Number((window.screen as any)?.orientation?.angle || 0);
+      const heading = (alpha + screenAngle + 360) % 360;
       userHeadingRef.current = heading;
       const marker = userLocationMarkerRef.current;
       if (!marker) return;
       const pos = marker.getLatLng();
       updateUserMarker(pos.lat, pos.lng, heading);
     };
+    window.addEventListener('deviceorientationabsolute', onOrientation as EventListener, true);
     window.addEventListener('deviceorientation', onOrientation, true);
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
+      window.removeEventListener('deviceorientationabsolute', onOrientation as EventListener, true);
       window.removeEventListener('deviceorientation', onOrientation, true);
       if (userLocationMarkerRef.current) {
         userLocationMarkerRef.current.remove();
