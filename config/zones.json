@@ -1,4 +1,39 @@
 {
   "version": 1,
-  "zones": []
+  "zones": [
+    {
+      "id": "addbfb1f-0f7c-4771-97c2-dd608f9789de",
+      "name": "Test",
+      "description": "Zone patatoïde tracée manuellement avec 5 sommets",
+      "centerLat": 42.962832647089535,
+      "centerLng": 0.3869333267211914,
+      "radiusMeters": 500,
+      "polygonCoords": [
+        [
+          42.965027851253225,
+          0.38643121719360357
+        ],
+        [
+          42.96237414294545,
+          0.3821396827697754
+        ],
+        [
+          42.96129064333129,
+          0.3861093521118164
+        ],
+        [
+          42.96185594985846,
+          0.39016485214233404
+        ],
+        [
+          42.96361464805923,
+          0.3898215293884278
+        ]
+      ],
+      "assignedCollarIds": [],
+      "color": "#5A6F4E",
+      "active": true,
+      "alertOnExit": true
+    }
+  ]
 }
