@@ -54,7 +54,9 @@
           0.40203094482421875
         ]
       ],
-      "assignedCollarIds": [],
+      "assignedCollarIds": [
+        "57832464-afc5-428a-b938-b457bdbec268"
+      ],
       "color": "#10B981",
       "active": true,
       "alertOnExit": true,
