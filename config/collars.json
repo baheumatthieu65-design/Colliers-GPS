@@ -8,7 +8,9 @@
       "color": "#EF4444",
       "mode": "simulation",
       "status": "active",
-      "activeZoneId": null
+      "activeZoneId": "6db4ea95-c17a-47f5-92d6-5c66e2892c0f",
+      "animalNumber": "D52321",
+      "baseTransmissionMinutes": 30
     }
   ]
 }
