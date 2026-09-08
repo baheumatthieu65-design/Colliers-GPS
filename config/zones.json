@@ -5,8 +5,8 @@
       "id": "243758fd-9ba8-4bd0-ba32-cda588957d31",
       "name": "Maison",
       "description": "Zone patatoïde tracée manuellement avec 9 sommets",
-      "centerLat": 42.94477574462137,
-      "centerLng": 0.3868794441223145,
+      "centerLat": 42.9447792349213,
+      "centerLng": 0.38694620132446295,
       "radiusMeters": 500,
       "polygonCoords": [
         [
@@ -42,8 +42,8 @@
           0.3859591484069824
         ],
         [
-          42.94827145327554,
-          0.3823971748352051
+          42.948302865974895,
+          0.38299798965454107
         ]
       ],
       "assignedCollarIds": [],
