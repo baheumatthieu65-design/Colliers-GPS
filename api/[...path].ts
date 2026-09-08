@@ -590,7 +590,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       );
 
       // Puis nettoyer les données opérationnelles Supabase.
-      const dependentTables = ['command_targets', 'device_events', 'positions', 'alerts', 'push_subscriptions', 'collar_zones'];
+      const dependentTables = ['command_targets', 'device_events', 'positions', 'alerts', 'collar_zones'];
       for (const table of dependentTables) {
         const { error: depError } = await supabase.from(table).delete().eq('collar_id', id);
         if (depError) return error(res, 400, `GitHub mis à jour mais nettoyage Supabase impossible (${table}).`, depError);
@@ -712,19 +712,34 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
     // ---------------- ALERTS ----------------
     if (path === 'alerts' && method === 'GET') {
-      const { data, error: dbError } = await supabase.from('alerts').select('*').order('created_at', { ascending: false }).limit(200);
+      const [{ data, error: dbError }, collarsConfig, zonesConfig] = await Promise.all([
+        supabase.from('alerts').select('*').order('created_at', { ascending: false }).limit(200),
+        readCollarsConfig(),
+        readZonesConfig(),
+      ]);
       if (dbError) return error(res, 500, 'Erreur lecture alertes.', dbError.message);
-      return res.status(200).json((data || []).map((a: any) => ({
-        id: a.id,
-        collarId: a.collar_id,
-        zoneId: a.zone_id,
-        timestamp: a.created_at,
-        lat: a.latitude,
-        lng: a.longitude,
-        type: a.type === 'zone_exit' ? 'EXIT_ZONE' : a.type.toUpperCase(),
-        status: a.acknowledged ? 'RESOLVED' : 'ACTIVE',
-        message: a.message,
-      })));
+
+      const collarsById = new Map(collarsConfig.data.collars.map((c) => [c.id, c]));
+      const zonesById = new Map(zonesConfig.data.zones.map((z) => [z.id, z]));
+
+      return res.status(200).json((data || []).map((a: any) => {
+        const collar = a.collar_id ? collarsById.get(a.collar_id) : undefined;
+        const zone = a.zone_id ? zonesById.get(a.zone_id) : undefined;
+        return {
+          id: a.id,
+          collarId: a.collar_id || '',
+          sheepName: collar?.sheepName || 'Brebis inconnue',
+          collarNumber: collar?.collarNumber || 'Collier inconnu',
+          zoneId: a.zone_id || undefined,
+          zoneName: zone?.name || undefined,
+          timestamp: a.created_at,
+          lat: a.latitude ?? 0,
+          lng: a.longitude ?? 0,
+          type: a.type === 'zone_exit' ? 'EXIT_ZONE' : String(a.type || 'OTHER').toUpperCase(),
+          status: a.acknowledged ? 'RESOLVED' : 'ACTIVE',
+          message: a.message || 'Alerte sans message.',
+        };
+      }));
     }
 
     const resolveMatch = path.match(/^alerts\/([^/]+)\/resolve$/);

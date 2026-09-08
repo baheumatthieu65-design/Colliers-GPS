@@ -1,5 +1,5 @@
 import React from 'react';
-import { GPSCollar, GeofenceZone } from '../types';
+import { GPSCollar, GeofenceZone, shortId } from '../types';
 import { Plus, Trash2, Edit3, Zap, Battery, Signal, Shield, Radio, ShieldAlert } from 'lucide-react';
 
 interface CollarManagerProps {
@@ -22,7 +22,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
   onStopPushForCollar,
 }) => {
   const handleEdit = (collar: GPSCollar) => {
-    console.log('[PaturGPS] Modifier collier:', collar.id);
+    console.log('[PaturGPS] Modifier collier:', shortId(collar.id));
     onEditCollar(collar);
   };
 
@@ -31,7 +31,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
       `Voulez-vous vraiment supprimer le collier de ${collar.sheepName} (${collar.collarNumber}) ?`
     );
     if (!ok) return;
-    console.log('[PaturGPS] Supprimer collier:', collar.id);
+    console.log('[PaturGPS] Supprimer collier:', shortId(collar.id));
     await onDeleteCollar(collar.id);
   };
 
@@ -48,10 +48,10 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
     e.preventDefault();
     e.stopPropagation();
     if (action === 'edit') {
-      console.log('[PaturGPS] CAPTURE EDIT', collar.id);
+      console.log('[PaturGPS] CAPTURE EDIT', shortId(collar.id));
       onEditCollar(collar);
     } else if (action === 'delete') {
-      console.log('[PaturGPS] CAPTURE DELETE', collar.id);
+      console.log('[PaturGPS] CAPTURE DELETE', shortId(collar.id));
       void handleDelete(collar);
     }
   };

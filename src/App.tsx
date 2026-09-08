@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { GPSCollar, GeofenceZone, GeofenceAlert, GPSPositionLog } from './types';
+import { GPSCollar, GeofenceZone, GeofenceAlert, GPSPositionLog, shortId } from './types';
 import { Navbar } from './components/Navbar';
 import { InteractiveMap } from './components/InteractiveMap';
 import { CollarManager } from './components/CollarManager';
@@ -335,13 +335,13 @@ export default function App() {
       event.stopPropagation();
 
       if (action === 'edit') {
-        console.log('[PaturGPS] NATIVE EDIT', collar.id);
+        console.log('[PaturGPS] NATIVE EDIT', shortId(collar.id));
         setEditingCollar(collar);
         setIsCollarModalOpen(true);
       }
 
       if (action === 'delete') {
-        console.log('[PaturGPS] NATIVE DELETE', collar.id);
+        console.log('[PaturGPS] NATIVE DELETE', shortId(collar.id));
         void handleDeleteCollar(collar.id);
       }
     };

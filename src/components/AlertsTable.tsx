@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GeofenceAlert } from '../types';
+import { GeofenceAlert, shortId } from '../types';
 import { 
   ShieldAlert, 
   CheckCircle, 
@@ -26,9 +26,9 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
 
   const filteredAlerts = alerts.filter(alert => {
     const matchesSearch = 
-      alert.sheepName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      alert.collarNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (alert.zoneName && alert.zoneName.toLowerCase().includes(searchQuery.toLowerCase()));
+      (alert.sheepName || 'Brebis inconnue').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (alert.collarNumber || 'Collier inconnu').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (alert.zoneName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = 
       statusFilter === 'ALL' || alert.status === statusFilter;
@@ -39,7 +39,7 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
   const exportCSV = () => {
     const headers = ['ID', 'Date/Heure', 'Brebis', 'Collier', 'Type', 'Statut', 'Zone', 'Message', 'Lat', 'Lng'];
     const rows = filteredAlerts.map(a => [
-      a.id,
+      shortId(a.id),
       new Date(a.timestamp).toLocaleString('fr-FR'),
       a.sheepName,
       a.collarNumber,
@@ -160,9 +160,9 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
                       <div className="flex items-center space-x-2">
                         <span className="text-base">🐑</span>
                         <div>
-                          <span>{alert.sheepName}</span>
+                          <span>{alert.sheepName || 'Brebis inconnue'}</span>
                           <span className="block text-[10px] text-[#7D8A74] font-mono">
-                            {alert.collarNumber}
+                            {alert.collarNumber || 'Collier inconnu'}
                           </span>
                         </div>
                       </div>

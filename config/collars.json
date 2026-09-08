@@ -2,14 +2,13 @@
   "version": 1,
   "collars": [
     {
-      "id": "c03023fc-7ac7-41af-b9a0-aede01dc39b2",
-      "sheepName": "Test",
-      "collarNumber": "COL-727",
-      "animalNumber": "542",
-      "color": "#64748B",
+      "id": "e1e13e3f-15b8-4ac8-b519-80686918777a",
+      "sheepName": "Fanny",
+      "collarNumber": "COL-289",
+      "color": "#EF4444",
       "mode": "simulation",
       "status": "active",
-      "activeZoneId": "d6d6010d-d8ee-4a1a-91a9-5dd87bf5c1b9"
+      "activeZoneId": null
     }
   ]
 }
