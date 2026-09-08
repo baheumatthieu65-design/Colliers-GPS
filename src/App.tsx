@@ -106,13 +106,13 @@ export default function App() {
     const asText = (value: any): string => {
       if (value == null) return '';
       if (typeof value === 'string') return value.trim();
-      if (value instanceof Error) return value.message || String(value);
+      if (value instanceof Error) return value.message || '';
       if (typeof value === 'number' || typeof value === 'boolean') return String(value);
       try {
         const json = JSON.stringify(value);
-        return json && json !== '{}' ? json : String(value);
+        return json && json !== '{}' ? json : '';
       } catch {
-        return String(value);
+        return '';
       }
     };
 
@@ -121,14 +121,15 @@ export default function App() {
       details?.message,
       details?.details,
       details?.hint,
-      details,
       data?.error,
       data?.message,
+      details,
+      data,
     ];
 
     for (const candidate of candidates) {
       const text = asText(candidate);
-      if (text) return text;
+      if (text && text !== '[object Object]') return text;
     }
 
     return `Erreur HTTP ${status}`;

@@ -109,14 +109,32 @@ function signalQuality(signal: number | null | undefined) {
   return 'Faible';
 }
 
+function errorText(value: any): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return value.message || '';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    const json = JSON.stringify(value);
+    return json && json !== '{}' ? json : '';
+  } catch {
+    return '';
+  }
+}
+
 function normalizeError(details: any) {
   if (details == null) return null;
   if (typeof details === 'string') return details;
+  if (details instanceof Error) {
+    return { message: details.message || 'Erreur inconnue.' };
+  }
+
+  const message = errorText(details.message) || errorText(details.details) || errorText(details.hint) || errorText(details) || 'Erreur inconnue.';
   return {
-    message: details.message || String(details),
-    code: details.code || undefined,
-    details: details.details || undefined,
-    hint: details.hint || undefined,
+    message,
+    code: errorText(details.code) || undefined,
+    details: errorText(details.details) || undefined,
+    hint: errorText(details.hint) || undefined,
   };
 }
 
