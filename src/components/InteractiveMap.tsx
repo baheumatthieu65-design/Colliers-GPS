@@ -134,7 +134,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       url:
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       attribution:
-        '🇫🇷 | Leaflet | Esri World Imagery & Pasture Topo',
+        '🇫🇷',
     },
 
     topo: {
@@ -142,7 +142,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       url:
         'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
       attribution:
-        'OpenTopoMap & SRTM Contour',
+        '🇫🇷',
     },
 
     osm: {
@@ -150,7 +150,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       url:
         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution:
-        'OpenStreetMap Contributors',
+        '🇫🇷',
     },
   };
 
@@ -185,7 +185,20 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       center: initialCenter,
       zoom: 13,
       zoomControl: false,
+      attributionControl: false,
     });
+
+    const frenchFlagControl = L.control({ position: 'bottomleft' });
+    frenchFlagControl.onAdd = () => {
+      const container = L.DomUtil.create('div', 'leaflet-control paturgps-map-flag');
+      container.textContent = '🇫🇷';
+      container.title = "Pâtur'GPS";
+      container.setAttribute('aria-label', "Pâtur'GPS");
+      container.style.cssText = 'background:rgba(255,255,255,.9);border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:3px 6px;font-size:18px;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.25);';
+      L.DomEvent.disableClickPropagation(container);
+      return container;
+    };
+    frenchFlagControl.addTo(map);
 
     const tileLayer = L.tileLayer(
       tileSources[tileStyle].url,
@@ -232,6 +245,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         polylineRef.current.remove();
       }
 
+      frenchFlagControl.remove();
       map.remove();
 
       mapRef.current = null;

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GPSCollar, GeofenceZone, GeofenceAlert, GPSPositionLog, shortId } from './types';
 import { Navbar } from './components/Navbar';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { InteractiveMap } from './components/InteractiveMap';
 import { CollarManager } from './components/CollarManager';
 import { CollarModal } from './components/CollarModal';
@@ -17,7 +18,6 @@ import { TrackHistory } from './components/TrackHistory';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { Radio, ShieldAlert, Zap, Compass, CheckCircle2, Bell as BellIcon } from 'lucide-react';
-import { PWAInstallButton } from './components/PWAInstallButton';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'map' | 'collars' | 'zones' | 'alerts' | 'history'>('map');
@@ -401,9 +401,10 @@ export default function App() {
           onOpenAlerts={() => setIsAlertsPopupOpen(true)}
         />
 
-        {/* PWA installation shortcut */}
-        <div className="fixed right-3 bottom-20 md:bottom-4 z-[60]">
-          <PWAInstallButton compact />
+        <div className="px-2 sm:px-4 pt-2">
+          <div className="max-w-7xl mx-auto flex justify-end">
+            <PWAInstallButton />
+          </div>
         </div>
 
         {/* Main Application Canvas View */}
