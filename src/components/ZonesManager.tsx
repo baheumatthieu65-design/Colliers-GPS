@@ -1,6 +1,6 @@
 import React from 'react';
 import { GeofenceZone, GPSCollar } from '../types';
-import { Plus, Trash2, Edit3, Shield, MapPin, Radio, Layers } from 'lucide-react';
+import { Plus, Trash2, Edit3, Shield, MapPin, Layers, PencilRuler, Eye, EyeOff } from 'lucide-react';
 
 interface ZonesManagerProps {
   zones: GeofenceZone[];
@@ -9,6 +9,7 @@ interface ZonesManagerProps {
   onEditZone: (zone: GeofenceZone) => void;
   onDeleteZone: (zoneId: string) => void;
   onCreatePatatoide: () => void;
+  onRetracePatatoide: (zone: GeofenceZone) => void;
 }
 
 export const ZonesManager: React.FC<ZonesManagerProps> = ({
@@ -18,6 +19,7 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
   onEditZone,
   onDeleteZone,
   onCreatePatatoide,
+  onRetracePatatoide,
 }) => {
   return (
     <div className="space-y-3 sm:space-y-6">
@@ -47,7 +49,7 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
             className="flex items-center justify-center space-x-2 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Créer une Clôture Virtuelle</span>
+            <span>Créer une Clôture Virtuelle ({zones.length})</span>
           </button>
         </div>
       </div>
@@ -62,7 +64,8 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
           return (
             <div 
               key={zone.id}
-              className="bg-white border border-[#E2E6DF] rounded-2xl p-3 sm:p-5 shadow-sm hover:border-[#C5D1C1] transition-all flex flex-col justify-between"
+              onClick={(e) => { e.stopPropagation(); onEditZone(zone); }}
+              className="bg-white border border-[#E2E6DF] rounded-2xl p-3 sm:p-5 shadow-sm hover:border-[#C5D1C1] transition-all flex flex-col justify-between cursor-pointer"
             >
               <div>
                 <div className="flex items-start justify-between">
@@ -83,13 +86,14 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
 
                   <div className="flex items-center space-x-1">
                     <button
-                      onClick={() => onEditZone(zone)}
+                      onClick={(e) => { e.stopPropagation(); onEditZone(zone); }}
                       className="p-2 text-[#7D8A74] hover:text-[#2C3327] hover:bg-[#F2F4F1] rounded-lg cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (confirm(`Voulez-vous supprimer la zone "${zone.name}" ?`)) {
                           onDeleteZone(zone.id);
                         }
@@ -137,6 +141,22 @@ export const ZonesManager: React.FC<ZonesManagerProps> = ({
                     ))}
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {zone.polygonCoords && zone.polygonCoords.length >= 3 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRetracePatatoide(zone); }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#D8E0D5] hover:bg-[#C5D1C1] text-[#3E4A35] border border-[#C5D1C1] text-[11px] font-bold cursor-pointer"
+                  >
+                    <PencilRuler className="w-3.5 h-3.5" />
+                    Retracer la patatoïde
+                  </button>
+                )}
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#7D8A74]">
+                  {zone.fillVisible === false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {zone.fillVisible === false ? 'Contour seul' : 'Zone remplie'}
+                </span>
               </div>
 
               <div className="mt-4 pt-3 border-t border-[#E2E6DF] flex items-center justify-between text-xs">

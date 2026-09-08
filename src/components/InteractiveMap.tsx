@@ -28,6 +28,7 @@ interface InteractiveMapProps {
   onOpenPushModalForCollar: (collarId: string) => void;
   onSaveZone?: (zone: Partial<GeofenceZone>) => void;
   startPatatoideRequest?: number;
+  patatoideEditZone?: GeofenceZone | null;
 }
 
 type MapTileStyle = 'satellite' | 'topo' | 'osm';
@@ -55,6 +56,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onOpenPushModalForCollar,
   onSaveZone,
   startPatatoideRequest = 0,
+  patatoideEditZone = null,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -65,7 +67,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const polylineRef = useRef<L.Polyline | null>(null);
 
   const drawingPolygonRef = useRef<L.Polygon | null>(null);
-  const drawingMarkersRef = useRef<L.CircleMarker[]>([]);
+  const drawingMarkersRef = useRef<L.Marker[]>([]);
 
   const [tileStyle, setTileStyle] =
     useState<MapTileStyle>('satellite');
@@ -96,6 +98,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   const [patatoideColor, setPatatoideColor] =
     useState<string>('#5A6F4E');
+
+  const [patatoideFillVisible, setPatatoideFillVisible] =
+    useState<boolean>(true);
+
+  const [patatoideEditZoneIdLocal, setPatatoideEditZoneIdLocal] =
+    useState<string | null>(null);
 
   const initialFitDoneRef =
     useRef<boolean>(false);
@@ -309,8 +317,27 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     setIsDrawingPatatoide(true);
-    setDrawingPoints([]);
     setIsSaveZoneModalOpen(false);
+
+    setPatatoideEditZoneIdLocal(patatoideEditZone?.id || null);
+
+    if (patatoideEditZone?.polygonCoords?.length >= 3) {
+      const points = patatoideEditZone.polygonCoords.map((point) => [Number(point[0]), Number(point[1])] as [number, number]);
+      setDrawingPoints(points);
+      setPatatoideName(patatoideEditZone.name || '');
+      setPatatoideColor(patatoideEditZone.color || '#5A6F4E');
+      setPatatoideFillVisible(patatoideEditZone.fillVisible !== false);
+
+      const bounds = L.latLngBounds(points);
+      if (bounds.isValid()) {
+        mapRef.current.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: false });
+      }
+    } else {
+      setDrawingPoints([]);
+      setPatatoideName('');
+      setPatatoideColor('#5A6F4E');
+      setPatatoideFillVisible(true);
+    }
   }, [startPatatoideRequest]);
 
   /*
@@ -381,27 +408,31 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       return;
     }
 
-    drawingPoints.forEach(
-      (point, index) => {
-        const marker = L.circleMarker(
-          point,
-          {
-            radius: 6,
-            color: '#ffffff',
-            fillColor:
-              index === 0
-                ? '#EF4444'
-                : '#5A6F4E',
-            fillOpacity: 1,
-            weight: 2,
-          }
-        ).addTo(mapRef.current!);
+    drawingPoints.forEach((point, index) => {
+      const marker = L.marker(point, {
+        draggable: true,
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:14px;height:14px;border-radius:50%;background:${index === 0 ? '#EF4444' : '#5A6F4E'};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);cursor:grab;"></div>`,
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        }),
+      }).addTo(mapRef.current!);
 
-        drawingMarkersRef.current.push(
-          marker
+      marker.on('dragstart', (event) => {
+        L.DomEvent.stopPropagation(event as any);
+      });
+      marker.on('dragend', () => {
+        const latLng = marker.getLatLng();
+        setDrawingPoints((prev) =>
+          prev.map((p, pointIndex) =>
+            pointIndex === index ? [latLng.lat, latLng.lng] : p
+          )
         );
-      }
-    );
+      });
+
+      drawingMarkersRef.current.push(marker);
+    });
 
     if (drawingPoints.length >= 2) {
       drawingPolygonRef.current =
@@ -410,7 +441,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           {
             color: patatoideColor,
             fillColor: patatoideColor,
-            fillOpacity: 0.25,
+            fillOpacity: patatoideFillVisible ? 0.25 : 0,
             weight: 3,
             dashArray: '5, 5',
           }
@@ -419,6 +450,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   }, [
     drawingPoints,
     patatoideColor,
+    patatoideFillVisible,
   ]);
 
   /*
@@ -504,7 +536,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             {
               color: zone.color,
               fillColor: zone.color,
-              fillOpacity: 0.2,
+              fillOpacity: zone.fillVisible === false ? 0 : 0.2,
               weight: 2.5,
               dashArray: '6, 6',
             }
@@ -562,7 +594,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               zone.radiusMeters,
             color: zone.color,
             fillColor: zone.color,
-            fillOpacity: 0.15,
+            fillOpacity: zone.fillVisible === false ? 0 : 0.15,
             weight: 2,
             dashArray: '6, 6',
           }
@@ -1203,7 +1235,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           `Patatoïde Estive (${zones.length + 1})`,
 
         description:
-          `Zone patatoïde tracée manuellement avec ${drawingPoints.length} sommets`,
+          patatoideEditZoneIdLocal && patatoideEditZone
+            ? patatoideEditZone.description || `Zone patatoïde retracée avec ${drawingPoints.length} sommets`
+            : `Zone patatoïde tracée manuellement avec ${drawingPoints.length} sommets`,
+
+        id: patatoideEditZoneIdLocal || undefined,
 
         polygonCoords:
           drawingPoints,
@@ -1212,11 +1248,15 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           patatoideColor,
 
         assignedCollarIds:
-          ['all'],
+          patatoideEditZoneIdLocal && patatoideEditZone
+            ? patatoideEditZone.assignedCollarIds
+            : ['all'],
 
         active: true,
 
         alertOnExit: true,
+
+        fillVisible: patatoideFillVisible,
       });
     }
 
@@ -1231,6 +1271,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     setDrawingPoints([]);
 
     setPatatoideName('');
+    setPatatoideEditZoneIdLocal(null);
   };
 
   /*
@@ -1820,7 +1861,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 <Pentagon className="w-5 h-5 text-[#5A6F4E]" />
 
                 <h3 className="font-bold text-base">
-                  Enregistrer la Zone Patatoïde
+                  {patatoideEditZoneIdLocal ? 'Modifier la Zone Patatoïde' : 'Enregistrer la Zone Patatoïde'}
                 </h3>
 
               </div>
@@ -1914,6 +1955,22 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </div>
               </div>
 
+              {/* REMPLISSAGE */}
+              <div className="flex items-center justify-between bg-[#F2F4F1] border border-[#E2E6DF] rounded-xl px-3 py-2.5">
+                <div>
+                  <div className="text-xs font-bold text-[#3E4A35]">Afficher le cœur de la zone</div>
+                  <div className="text-[10px] text-[#7D8A74]">Désactivé = uniquement le contour</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPatatoideFillVisible(v => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${patatoideFillVisible ? 'bg-[#5A6F4E]' : 'bg-stone-300'}`}
+                  aria-pressed={patatoideFillVisible}
+                >
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${patatoideFillVisible ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
               {/* INFORMATIONS */}
 
               <div className="bg-[#F2F4F1] p-3 rounded-xl text-[11px] text-[#7D8A74] space-y-1">
@@ -1967,7 +2024,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   type="submit"
                   className="px-4 py-2 bg-[#5A6F4E] hover:bg-[#4A5D3E] text-white rounded-xl font-bold cursor-pointer shadow-sm"
                 >
-                  Créer la Zone Patatoïde
+                  {patatoideEditZoneIdLocal ? 'Enregistrer les modifications' : 'Créer la Zone Patatoïde'}
                 </button>
 
               </div>

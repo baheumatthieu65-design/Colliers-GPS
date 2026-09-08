@@ -42,6 +42,7 @@ export default function App() {
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
   const [isAlertsPopupOpen, setIsAlertsPopupOpen] = useState(false);
   const [patatoideRequest, setPatatoideRequest] = useState(0);
+  const [patatoideEditZoneId, setPatatoideEditZoneId] = useState<string | null>(null);
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -232,28 +233,28 @@ export default function App() {
   // Handlers for Geofence Zones
   const handleSaveZone = async (zoneData: Partial<GeofenceZone>) => {
     try {
-      if (editingZone) {
-        const res = await fetch(`/api/zones/${editingZone.id}`, {
-          method: 'PUT',
+      const targetZoneId = zoneData.id || editingZone?.id;
+      const isEditing = Boolean(targetZoneId);
+      const res = await fetch(
+        isEditing ? `/api/zones/${encodeURIComponent(targetZoneId!)}` : '/api/zones',
+        {
+          method: isEditing ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(zoneData),
-        });
-        if (res.ok) {
-          showNotification(`Zone "${zoneData.name}" mise à jour.`);
         }
-      } else {
-        const res = await fetch('/api/zones', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(zoneData),
-        });
-        if (res.ok) {
-          showNotification(`Nouvelle zone de clôture "${zoneData.name}" créée.`);
-        }
-      }
-      fetchZones();
-    } catch (err) {
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(formatApiError(data, res.status));
+      showNotification(
+        isEditing
+          ? `Zone "${zoneData.name || editingZone?.name || ''}" mise à jour.`
+          : `Nouvelle zone de clôture "${zoneData.name || ''}" créée.`
+      );
+      await fetchZones();
+      setEditingZone(null);
+    } catch (err: any) {
       console.error('Error saving zone:', err);
+      showNotification(`Erreur : ${err?.message || 'Impossible d’enregistrer la clôture.'}`);
     }
   };
 
@@ -279,6 +280,20 @@ export default function App() {
       }
     } catch (err) {
       console.error('Error resolving alert:', err);
+    }
+  };
+
+  const handleClearResolvedAlerts = async () => {
+    if (!window.confirm('Supprimer définitivement toutes les alertes acquittées ?')) return;
+    try {
+      const res = await fetch('/api/alerts/cleanup', { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(formatApiError(data, res.status));
+      showNotification(`${data?.deleted || 0} alerte(s) acquittée(s) supprimée(s).`);
+      await fetchAlerts();
+    } catch (err: any) {
+      console.error('Error cleaning alerts:', err);
+      showNotification(`Erreur : ${err?.message || 'Impossible de nettoyer les alertes.'}`);
     }
   };
 
@@ -424,6 +439,7 @@ export default function App() {
                 }}
                 onSaveZone={handleSaveZone}
                 startPatatoideRequest={patatoideRequest}
+                patatoideEditZone={zones.find((zone) => zone.id === patatoideEditZoneId) || null}
               />
             </div>
           )}
@@ -465,6 +481,14 @@ export default function App() {
               }}
               onDeleteZone={handleDeleteZone}
               onCreatePatatoide={() => {
+                setEditingZone(null);
+                setPatatoideEditZoneId(null);
+                setActiveTab('map');
+                setPatatoideRequest(prev => prev + 1);
+              }}
+              onRetracePatatoide={(zone) => {
+                setEditingZone(zone);
+                setPatatoideEditZoneId(zone.id);
                 setActiveTab('map');
                 setPatatoideRequest(prev => prev + 1);
               }}
@@ -476,6 +500,7 @@ export default function App() {
             <AlertsTable
               alerts={alerts}
               onResolveAlert={handleResolveAlert}
+              onClearResolvedAlerts={handleClearResolvedAlerts}
               onLocateOnMap={(lat, lng) => {
                 setActiveTab('map');
               }}

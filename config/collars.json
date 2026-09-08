@@ -5,11 +5,10 @@
       "id": "e1e13e3f-15b8-4ac8-b519-80686918777a",
       "sheepName": "Fanny",
       "collarNumber": "COL-289",
-      "color": "#10B981",
+      "color": "#EF4444",
       "mode": "simulation",
       "status": "active",
-      "activeZoneId": null,
-      "animalNumber": "556"
+      "activeZoneId": null
     }
   ]
 }

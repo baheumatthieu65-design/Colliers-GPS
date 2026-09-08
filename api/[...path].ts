@@ -284,6 +284,7 @@ type GithubZoneConfig = {
   color: string;
   active: boolean;
   alertOnExit: boolean;
+  fillVisible?: boolean;
 };
 
 type CollarsConfigFile = { version: number; collars: GithubCollarConfig[] };
@@ -342,6 +343,7 @@ function mapZone(config: GithubZoneConfig) {
     color: config.color || '#5A6F4E',
     active: config.active !== false,
     alertOnExit: config.alertOnExit !== false,
+    fillVisible: config.fillVisible !== false,
   };
 }
 
@@ -635,6 +637,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         color: body.color || '#5A6F4E',
         active: body.active !== false,
         alertOnExit: body.alertOnExit !== false,
+        fillVisible: body.fillVisible !== false,
       };
 
       await githubWriteJson(
@@ -680,6 +683,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         color: body.color !== undefined ? body.color : current.color,
         active: body.active !== undefined ? Boolean(body.active) : current.active,
         alertOnExit: body.alertOnExit !== undefined ? Boolean(body.alertOnExit) : current.alertOnExit,
+        fillVisible: body.fillVisible !== undefined ? Boolean(body.fillVisible) : current.fillVisible !== false,
       };
 
       config.data.zones[index] = updated;
@@ -748,6 +752,16 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const { data, error: dbError } = await supabase.from('alerts').update({ acknowledged: true, acknowledged_at: new Date().toISOString() }).eq('id', id).select('*').single();
       if (dbError) return error(res, 400, 'Impossible de résoudre l’alerte.', dbError.message);
       return res.status(200).json({ success: true, alert: data });
+    }
+
+    if (path === 'alerts/cleanup' && method === 'DELETE') {
+      const { data, error: dbError } = await supabase
+        .from('alerts')
+        .delete()
+        .eq('acknowledged', true)
+        .select('id');
+      if (dbError) return error(res, 400, 'Impossible de nettoyer les alertes acquittées.', dbError.message);
+      return res.status(200).json({ ok: true, success: true, deleted: data?.length || 0 });
     }
 
     // ---------------- HISTORY ----------------

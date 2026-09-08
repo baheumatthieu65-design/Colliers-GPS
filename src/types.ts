@@ -45,6 +45,7 @@ export interface GeofenceZone {
   color: string;
   active: boolean;
   alertOnExit: boolean;
+  fillVisible?: boolean;
 }
 
 export interface GPSPositionLog {

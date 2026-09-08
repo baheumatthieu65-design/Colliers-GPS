@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GeofenceZone, GPSCollar } from '../types';
 import { Layers, Shield, X, Palette } from 'lucide-react';
 
@@ -32,6 +32,18 @@ export const GeofenceModal: React.FC<GeofenceModalProps> = ({
   const [color, setColor] = useState(initialZone?.color || '#10B981');
   const [centerLat, setCenterLat] = useState(initialZone?.centerLat || 42.8450);
   const [centerLng, setCenterLng] = useState(initialZone?.centerLng || -0.0150);
+  const [fillVisible, setFillVisible] = useState(initialZone?.fillVisible !== false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setName(initialZone?.name || '');
+    setDescription(initialZone?.description || '');
+    setRadiusMeters(initialZone?.radiusMeters || 500);
+    setColor(initialZone?.color || '#10B981');
+    setCenterLat(initialZone?.centerLat || 42.8450);
+    setCenterLng(initialZone?.centerLng || -0.0150);
+    setFillVisible(initialZone?.fillVisible !== false);
+  }, [isOpen, initialZone]);
 
   if (!isOpen) return null;
 
@@ -49,6 +61,7 @@ export const GeofenceModal: React.FC<GeofenceModalProps> = ({
       assignedCollarIds: ['all'],
       active: true,
       alertOnExit: true,
+      fillVisible,
     });
 
     onClose();
@@ -175,6 +188,22 @@ export const GeofenceModal: React.FC<GeofenceModalProps> = ({
                 />
               ))}
             </div>
+          </div>
+
+          {/* Remplissage de la zone */}
+          <div className="flex items-center justify-between bg-[#F2F4F1] border border-[#E2E6DF] rounded-xl px-3 py-2.5">
+            <div>
+              <div className="text-xs font-bold text-[#2C3327]">Afficher le cœur de la zone</div>
+              <div className="text-[10px] text-[#7D8A74]">Désactivé = uniquement le contour</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFillVisible(v => !v)}
+              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${fillVisible ? 'bg-[#5A6F4E]' : 'bg-stone-300'}`}
+              aria-pressed={fillVisible}
+            >
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${fillVisible ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
           </div>
 
           {/* Footer Buttons */}

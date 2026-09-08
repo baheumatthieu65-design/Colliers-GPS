@@ -14,12 +14,14 @@ interface AlertsTableProps {
   alerts: GeofenceAlert[];
   onResolveAlert: (alertId: string) => void;
   onLocateOnMap?: (lat: number, lng: number) => void;
+  onClearResolvedAlerts?: () => void;
 }
 
 export const AlertsTable: React.FC<AlertsTableProps> = ({
   alerts,
   onResolveAlert,
   onLocateOnMap,
+  onClearResolvedAlerts,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED'>('ALL');
@@ -46,7 +48,7 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
       a.type,
       a.status,
       a.zoneName || 'N/A',
-      `"${a.message.replace(/"/g, '""')}"`,
+      `"${String(a.message || '').replace(/"/g, '""')}"`,
       a.lat,
       a.lng
     ]);
@@ -108,6 +110,17 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
               Acquittées
             </button>
           </div>
+
+          {statusFilter === 'RESOLVED' && alerts.some(a => a.status === 'RESOLVED') && onClearResolvedAlerts && (
+            <button
+              onClick={onClearResolvedAlerts}
+              className="flex items-center space-x-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              title="Supprimer les alertes acquittées"
+            >
+              <span>🗑️</span>
+              <span className="hidden sm:inline">Nettoyer acquittées</span>
+            </button>
+          )}
 
           <button
             onClick={exportCSV}
