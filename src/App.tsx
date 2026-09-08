@@ -386,6 +386,7 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           collars={collars}
+          zones={zones}
           alerts={alerts}
           onOpenAddCollar={() => {
             setEditingCollar(null);
@@ -597,9 +598,9 @@ export default function App() {
         {/* Footer */}
         <footer className="bg-white border-t border-[#E2E6DF] py-3 text-center text-[11px] text-[#7D8A74] hidden sm:block">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span className="font-medium text-[#3E4A35]">Pâtur'GPS App Mobile © 2026 - PWA Pastorale</span>
+            <span className="font-medium text-[#3E4A35]">Pâtur'GPS App Mobile © 2026 - PWA Pastorale - By Matth tous droits réservés</span>
             <span className="text-[#7D8A74]">
-              Cadence standard : 30 min | Cadence Push : 15s-60s | Synchronisation Cloud BDD
+              Cadence standard : 30 min | Cadence Push : 15s-60s + au choix | Synchronisation Cloud BDD
             </span>
           </div>
         </footer>

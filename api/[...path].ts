@@ -794,7 +794,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const durationMinutes = Number(body.durationMinutes);
       const intervalSeconds = Number(body.intervalSeconds);
       if (!durationMinutes || durationMinutes <= 0) return error(res, 400, 'Durée valide requise en minutes.');
-      if (![300, 600, 900, 1800].includes(intervalSeconds)) return error(res, 400, 'Cadence PUSH invalide. Utilisez 5, 10, 15 ou 30 minutes.');
+      if (![300, 600, 900, 1800].includes(intervalSeconds) && !(Number.isInteger(intervalSeconds) && intervalSeconds >= 15 && intervalSeconds <= 60)) return error(res, 400, 'Cadence PUSH invalide. Utilisez 5, 10, 15, 30 minutes ou une valeur personnalisée de 15 à 60 secondes.');
 
       const configs = await readCollarsConfig();
       const availableIds = new Set(configs.data.collars.map((c) => c.id));
