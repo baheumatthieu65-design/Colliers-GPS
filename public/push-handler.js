@@ -7,9 +7,7 @@ async function handlePush(event) {
   try {
     data = event.data ? event.data.json() : {};
   } catch (_) {
-    try {
-      data = event.data ? { body: event.data.text() } : {};
-    } catch (_) {}
+    try { data = event.data ? { body: event.data.text() } : {}; } catch (_) {}
   }
 
   const title = data.title || "Pâtur'GPS";
@@ -36,8 +34,7 @@ async function handlePush(event) {
     return;
   }
 
-  // DANGER : 10 notifications distinctes pour rendre l'alerte impossible à confondre.
-  // Les tags sont uniques afin que le navigateur ne remplace pas la notification précédente.
+  // DANGER : 10 notifications distinctes, espacées de 2 secondes.
   for (let i = 1; i <= 10; i++) {
     await self.registration.showNotification(`🚨 ${title}`, {
       ...baseOptions,
@@ -46,17 +43,14 @@ async function handlePush(event) {
     });
 
     if (i < 10) {
-      await new Promise(resolve => setTimeout(resolve, 350));
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 }
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  const url = event.notification.data && event.notification.data.url
-    ? event.notification.data.url
-    : "/";
+  const url = event.notification.data?.url || "/";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
@@ -66,7 +60,7 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus();
         }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      return clients.openWindow ? clients.openWindow(url) : undefined;
     })
   );
 });
