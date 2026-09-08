@@ -67,6 +67,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const markersRef = useRef<{ [collarId: string]: L.Marker }>({});
   const zonesRef = useRef<{ [zoneId: string]: L.Circle | L.Polygon }>({});
   const polylineRef = useRef<L.Polyline | null>(null);
+  const userLocationMarkerRef = useRef<L.Marker | null>(null);
+  const userHeadingRef = useRef<number | null>(null);
 
   const drawingPolygonRef = useRef<L.Polygon | null>(null);
   const drawingMarkersRef = useRef<L.Marker[]>([]);
@@ -239,6 +241,65 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       drawingMarkersRef.current = [];
       drawingPolygonRef.current = null;
       polylineRef.current = null;
+      if (userLocationMarkerRef.current) userLocationMarkerRef.current.remove();
+      userLocationMarkerRef.current = null;
+    };
+  }, []);
+
+  /*
+   * ============================================================
+   * POSITION UTILISATEUR + ORIENTATION
+   * ============================================================
+   * Point bleu façon Waze : la position est fournie par le GPS du
+   * téléphone et la flèche suit le cap lorsqu'il est disponible.
+   */
+  useEffect(() => {
+    if (!mapRef.current || !('geolocation' in navigator)) return;
+
+    const updateUserMarker = (lat: number, lng: number, heading?: number | null) => {
+      const map = mapRef.current;
+      if (!map || !isValidCoordinate(lat) || !isValidCoordinate(lng)) return;
+      if (typeof heading === 'number' && Number.isFinite(heading)) userHeadingRef.current = heading;
+      const rotation = userHeadingRef.current ?? 0;
+      const html = `
+        <div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
+          <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 100%;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #1677ff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));"></div>
+          <div style="width:16px;height:16px;border-radius:50%;background:#1683ff;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);position:relative;z-index:2;"></div>
+        </div>`;
+      const icon = L.divIcon({ className: 'paturgps-user-location', html, iconSize: [34,34], iconAnchor: [17,17] });
+      if (!userLocationMarkerRef.current) {
+        userLocationMarkerRef.current = L.marker([lat, lng], { icon, zIndexOffset: 2000, interactive: false }).addTo(map);
+      } else {
+        userLocationMarkerRef.current.setLatLng([lat, lng]);
+        userLocationMarkerRef.current.setIcon(icon);
+      }
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
+      position => updateUserMarker(position.coords.latitude, position.coords.longitude, position.coords.heading),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      const alpha = typeof event.alpha === 'number' ? event.alpha : null;
+      if (alpha === null) return;
+      const heading = (360 - alpha) % 360;
+      userHeadingRef.current = heading;
+      const marker = userLocationMarkerRef.current;
+      if (!marker) return;
+      const pos = marker.getLatLng();
+      updateUserMarker(pos.lat, pos.lng, heading);
+    };
+    window.addEventListener('deviceorientation', onOrientation, true);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.removeEventListener('deviceorientation', onOrientation, true);
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove();
+        userLocationMarkerRef.current = null;
+      }
     };
   }, []);
 

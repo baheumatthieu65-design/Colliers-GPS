@@ -417,6 +417,42 @@ async function mirrorCollarToSupabase(supabase: any, config: GithubCollarConfig,
   return data;
 }
 
+
+async function queueStandardCadenceCommand(supabase: any, collar: any, baseTransmissionMinutes: number) {
+  const minutes = Number(baseTransmissionMinutes);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  const cadenceSeconds = Math.max(60, Math.round(minutes * 60));
+  const payload = {
+    type: 'set_standard_cadence',
+    cadenceMinutes: minutes,
+    cadenceSeconds,
+    delivery: 'next_wakeup',
+    instruction: 'Au prochain réveil, appliquer cette cadence standard jusqu’à nouvelle modification ou PUSH temporaire.',
+  };
+
+  const { data: command, error: commandError } = await supabase.from('commands').insert({
+    command_type: 'configure',
+    cadence_seconds: cadenceSeconds,
+    duration_minutes: null,
+    target_mode: 'selected',
+    status: 'pending',
+    payload,
+  }).select('*').single();
+  if (commandError) throw new Error(`Impossible de créer la commande de cadence standard : ${commandError.message}`);
+
+  const targetRow = {
+    command_id: command.id,
+    collar_id: collar.id,
+    status: 'pending',
+    delivery_status: 'queued',
+    mqtt_topic: collar.imei ? `paturgps/${collar.imei}/command` : null,
+    mqtt_payload: { ...payload, collarId: collar.id, imei: collar.imei || null },
+  };
+  const { error: targetError } = await supabase.from('command_targets').insert(targetRow);
+  if (targetError) throw new Error(`Commande de cadence créée mais cible impossible à enregistrer : ${targetError.message}`);
+  return command;
+}
+
 export default async function handler(req: AnyReq, res: AnyRes) {
   cors(res);
 
@@ -505,6 +541,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
       try {
         const row = await mirrorCollarToSupabase(supabase, collarConfig, body);
+        await queueStandardCadenceCommand(supabase, { id: collarConfig.id, imei: row?.imei || body.imei || null }, collarConfig.baseTransmissionMinutes || 30);
         if (body.activeZoneId) {
           const zones = await readZonesConfig();
           const zone = zones.data.zones.find((z) => z.id === body.activeZoneId);
@@ -568,6 +605,9 @@ export default async function handler(req: AnyReq, res: AnyRes) {
           simPhone: body.simPhone !== undefined ? body.simPhone : existingRow?.sim_phone,
         };
         const row = await mirrorCollarToSupabase(supabase, updated, technicalBody);
+        if (Number(updated.baseTransmissionMinutes) !== Number(current.baseTransmissionMinutes)) {
+          await queueStandardCadenceCommand(supabase, { id: updated.id, imei: row?.imei || technicalBody.imei || null }, updated.baseTransmissionMinutes || 30);
+        }
         if (body.activeZoneId !== undefined) {
           const zones = await readZonesConfig();
           for (const zone of zones.data.zones) {

@@ -114,7 +114,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   const labelClass = 'block text-xs font-semibold text-[#2C3327] mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/40 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-stone-900/40 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white border border-[#E2E6DF] text-[#2C3327] rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-5 sm:p-6 shadow-xl relative">
         <div className="flex items-center justify-between pb-4 border-b border-[#E2E6DF] sticky top-0 bg-white z-10">
           <div className="flex items-center space-x-2">

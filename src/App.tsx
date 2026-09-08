@@ -157,8 +157,8 @@ export default function App() {
       await fetchCollars();
       showNotification(
         isEditing
-          ? `Collier de ${collarData.sheepName || editingCollar?.sheepName || ''} mis à jour avec succès.`
-          : `Nouveau collier pour ${collarData.sheepName || ''} créé avec succès.`
+          ? `Collier de ${collarData.sheepName || editingCollar?.sheepName || ''} mis à jour. Cadence standard mise en file pour le BG95 au prochain réveil.`
+          : `Nouveau collier pour ${collarData.sheepName || ''} créé. Cadence standard mise en file pour le BG95 au prochain réveil.`
       );
       return true;
     } catch (err: any) {

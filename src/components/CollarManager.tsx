@@ -86,7 +86,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
           return (
             <div
               key={collar.id}
-              className={`bg-white border rounded-2xl p-5 shadow-sm transition-all relative flex flex-col justify-between ${
+              className={`bg-white border rounded-2xl p-5 shadow-sm transition-all relative isolate flex flex-col justify-between ${
                 isOutOfZone
                   ? 'border-red-400 bg-red-50/50'
                   : 'border-[#E2E6DF] hover:border-[#C5D1C1]'
@@ -110,7 +110,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   </div>
 
                   {/* ACTIONS: large, explicit buttons. No parent click handler, no overlay. */}
-                  <div className="flex shrink-0 items-center gap-1 z-[100]">
+                  <div className="flex shrink-0 items-center gap-1 relative z-10">
                     <button
                       type="button"
                       title="Modifier le collier"
@@ -125,7 +125,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                         e.stopPropagation();
                         handleEdit(collar);
                       }}
-                      className="relative z-[101] inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-[#C5D1C1] bg-white text-[#5A6F4E] hover:bg-[#F2F4F1] font-bold text-[11px] cursor-pointer touch-manipulation select-none"
+                      className="relative z-20 inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-[#C5D1C1] bg-white text-[#5A6F4E] hover:bg-[#F2F4F1] font-bold text-[11px] cursor-pointer touch-manipulation select-none"
                     >
                       <Edit3 className="w-4 h-4" />
                       <span className="hidden sm:inline">Modifier</span>
@@ -145,7 +145,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                         e.stopPropagation();
                         void handleDelete(collar);
                       }}
-                      className="relative z-[101] inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold text-[11px] cursor-pointer touch-manipulation select-none"
+                      className="relative z-20 inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold text-[11px] cursor-pointer touch-manipulation select-none"
                     >
                       <Trash2 className="w-4 h-4" />
                       <span className="hidden sm:inline">Supprimer</span>
