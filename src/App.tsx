@@ -440,6 +440,9 @@ export default function App() {
                 onSaveZone={handleSaveZone}
                 startPatatoideRequest={patatoideRequest}
                 patatoideEditZone={zones.find((zone) => zone.id === patatoideEditZoneId) || null}
+                onPatatoideRequestHandled={() => {
+                  setPatatoideRequest(0);
+                }}
               />
             </div>
           )}

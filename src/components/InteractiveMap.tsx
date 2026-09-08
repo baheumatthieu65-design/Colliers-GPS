@@ -29,6 +29,7 @@ interface InteractiveMapProps {
   onSaveZone?: (zone: Partial<GeofenceZone>) => void;
   startPatatoideRequest?: number;
   patatoideEditZone?: GeofenceZone | null;
+  onPatatoideRequestHandled?: () => void;
 }
 
 type MapTileStyle = 'satellite' | 'topo' | 'osm';
@@ -57,6 +58,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onSaveZone,
   startPatatoideRequest = 0,
   patatoideEditZone = null,
+  onPatatoideRequestHandled,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -338,7 +340,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setPatatoideColor('#5A6F4E');
       setPatatoideFillVisible(true);
     }
-  }, [startPatatoideRequest]);
+
+    // Cette demande est consommée une seule fois.
+    // Sans remise à zéro, revenir sur la carte remontait l'ancien
+    // mode de tracé alors que l'utilisateur consultait seulement les clôtures.
+    onPatatoideRequestHandled?.();
+  }, [startPatatoideRequest, onPatatoideRequestHandled]);
 
   /*
    * ============================================================
