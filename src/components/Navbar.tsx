@@ -71,10 +71,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>En zone: <strong className="text-[#5A6F4E] font-bold">{collars.length - outOfZoneCount}</strong></span>
             </div>
             <div className="h-3.5 w-[1px] bg-[#E2E6DF]" />
-            <div className="flex items-center space-x-1">
-              <Layers className="w-3.5 h-3.5 text-[#5A6F4E]" />
-              <span>Clôtures: <strong className="text-[#2C3327] font-bold">{zones.length}</strong></span>
-            </div>
             {outOfZoneCount > 0 && (
               <>
                 <div className="h-3.5 w-[1px] bg-[#E2E6DF]" />
@@ -101,8 +97,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="flex items-center gap-1 text-[#3E4A35]"><Radio className="w-3 h-3 text-[#5A6F4E]" /> Colliers: <strong>{collars.length}</strong></span>
               <span className="h-3 w-px bg-[#E2E6DF]" />
               <span className="flex items-center gap-1 text-[#3E4A35]"><span className="w-1.5 h-1.5 rounded-full bg-[#5A6F4E]" /> En zone: <strong className="text-[#5A6F4E]">{collars.length - outOfZoneCount}</strong></span>
-              <span className="h-3 w-px bg-[#E2E6DF]" />
-              <span className="flex items-center gap-1 text-[#3E4A35]"><Layers className="w-3 h-3 text-[#5A6F4E]" /> Clôtures: <strong>{zones.length}</strong></span>
             </div>
 
             <button
@@ -171,6 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Layers className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="truncate">Clôtures</span>
+            <strong className="font-bold">({zones.length})</strong>
           </button>
 
           <button
