@@ -103,12 +103,35 @@ export default function App() {
 
   // Handlers for Collars
   const formatApiError = (data: any, status: number) => {
+    const asText = (value: any): string => {
+      if (value == null) return '';
+      if (typeof value === 'string') return value.trim();
+      if (value instanceof Error) return value.message || String(value);
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      try {
+        const json = JSON.stringify(value);
+        return json && json !== '{}' ? json : String(value);
+      } catch {
+        return String(value);
+      }
+    };
+
     const details = data?.details;
-    if (typeof details === 'string' && details.trim()) return details;
-    if (details && typeof details === 'object') {
-      return details.message || details.details || details.hint || JSON.stringify(details);
+    const candidates = [
+      details?.message,
+      details?.details,
+      details?.hint,
+      details,
+      data?.error,
+      data?.message,
+    ];
+
+    for (const candidate of candidates) {
+      const text = asText(candidate);
+      if (text) return text;
     }
-    return data?.error || data?.message || `Erreur HTTP ${status}`;
+
+    return `Erreur HTTP ${status}`;
   };
   const handleSaveCollar = async (collarData: Partial<GPSCollar>): Promise<boolean> => {
     try {
