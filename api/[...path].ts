@@ -270,6 +270,7 @@ type GithubCollarConfig = {
   status?: 'active' | 'inactive' | 'maintenance';
   notes?: string;
   activeZoneId?: string | null;
+  baseTransmissionMinutes?: number;
 };
 
 type GithubZoneConfig = {
@@ -315,18 +316,26 @@ function mapCollar(config: GithubCollarConfig, row: any, assignedZoneId?: string
     currentLng: row?.last_longitude ?? 0.3829,
     status: config.status === 'inactive' ? 'offline' : 'inside_zone',
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
-    pushMode: row?.push_mode || {
-      active: false,
-      intervalSeconds: 1800,
-      expiresAt: null,
-      durationMinutes: 0,
-    },
+    pushMode: row?.push_mode
+      ? {
+          ...row.push_mode,
+          intervalSeconds: row.push_mode.active
+            ? Number(row.push_mode.intervalSeconds || 1800)
+            : (Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) * 60 : 1800),
+        }
+      : {
+          active: false,
+          intervalSeconds: Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) * 60 : 1800,
+          expiresAt: null,
+          durationMinutes: 0,
+        },
     // Ces données viennent de Supabase, pas de la configuration GitHub.
     imei: row?.imei || undefined,
     iccid: row?.iccid || undefined,
     simPhone: row?.sim_phone || undefined,
     mode: config.mode || row?.mode || 'simulation',
     notes: config.notes || undefined,
+    baseTransmissionMinutes: Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) : 30,
   };
 }
 
@@ -487,6 +496,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         status: body.status || 'active',
         notes: body.notes || undefined,
         activeZoneId: body.activeZoneId || null,
+        baseTransmissionMinutes: Number(body.baseTransmissionMinutes) > 0 ? Number(body.baseTransmissionMinutes) : 30,
       };
 
       // GitHub est la source de vérité de la configuration du collier.
@@ -530,6 +540,9 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         status: body.status !== undefined ? body.status : current.status,
         notes: body.notes !== undefined ? body.notes : current.notes,
         activeZoneId: body.activeZoneId !== undefined ? body.activeZoneId : current.activeZoneId,
+        baseTransmissionMinutes: body.baseTransmissionMinutes !== undefined
+          ? (Number(body.baseTransmissionMinutes) > 0 ? Number(body.baseTransmissionMinutes) : 30)
+          : (Number(current.baseTransmissionMinutes) > 0 ? Number(current.baseTransmissionMinutes) : 30),
       };
 
       const duplicate = config.data.collars.find((c) => c.id !== id && c.collarNumber === updated.collarNumber);
@@ -794,7 +807,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const durationMinutes = Number(body.durationMinutes);
       const intervalSeconds = Number(body.intervalSeconds);
       if (!durationMinutes || durationMinutes <= 0) return error(res, 400, 'Durée valide requise en minutes.');
-      if (![300, 600, 900, 1800].includes(intervalSeconds) && !(Number.isInteger(intervalSeconds) && intervalSeconds >= 15 && intervalSeconds <= 60)) return error(res, 400, 'Cadence PUSH invalide. Utilisez 5, 10, 15, 30 minutes ou une valeur personnalisée de 15 à 60 secondes.');
+      if (!(Number.isInteger(intervalSeconds) && intervalSeconds >= 60 && intervalSeconds <= 86400)) return error(res, 400, 'Cadence PUSH invalide. Utilisez 5, 10, 15, 30 minutes ou une valeur personnalisée en minutes.');
 
       const configs = await readCollarsConfig();
       const availableIds = new Set(configs.data.collars.map((c) => c.id));

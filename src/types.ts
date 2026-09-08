@@ -31,6 +31,7 @@ export interface GPSCollar {
   simPhone?: string;
   mode?: 'simulation' | 'real';
   notes?: string;
+  baseTransmissionMinutes?: number;
 }
 
 export interface GeofenceZone {

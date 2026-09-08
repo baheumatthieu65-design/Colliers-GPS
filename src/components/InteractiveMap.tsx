@@ -132,7 +132,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       url:
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       attribution:
-        'Esri World Imagery & Pasture Topo',
+        '🇫🇷 | Leaflet | Esri World Imagery & Pasture Topo',
     },
 
     topo: {
@@ -1160,6 +1160,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     fitValidCollars();
   };
 
+  const handleCenterOnCollar = (collar: GPSCollar) => {
+    if (!mapRef.current || !hasValidPosition(collar)) return;
+    mapRef.current.flyTo([collar.currentLat, collar.currentLng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.8 });
+    onSelectCollar(collar.id);
+  };
+
   /*
    * ============================================================
    * VISIBILITÉ DES COLLIERS
@@ -1612,6 +1618,26 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           >
             <Navigation className="w-4 h-4" />
           </button>
+
+          <div className="w-full h-[1px] bg-white/20" />
+
+          <div className="flex flex-col items-center gap-1 py-0.5" title="Centrer une brebis">
+            {collars.filter(hasValidPosition).map((collar) => (
+              <button
+                key={`center-${collar.id}`}
+                type="button"
+                onClick={() => handleCenterOnCollar(collar)}
+                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/20 transition-all cursor-pointer"
+                title={`Centrer ${collar.sheepName}`}
+                aria-label={`Centrer ${collar.sheepName}`}
+              >
+                <span
+                  className="w-3.5 h-3.5 rounded-full border-2 border-white shadow-md"
+                  style={{ backgroundColor: collar.color }}
+                />
+              </button>
+            ))}
+          </div>
 
         </div>
 

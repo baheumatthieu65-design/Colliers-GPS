@@ -189,7 +189,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   ) : (
                     <div className="bg-[#D8E0D5]/50 text-[#3E4A35] border border-[#C5D1C1] p-2 rounded-xl text-xs font-medium flex items-center justify-between">
                       <span className="font-semibold">✓ En zone de pâturage</span>
-                      <span className="text-[10px] text-[#7D8A74]">Période std: 30 min</span>
+                      <span className="text-[10px] text-[#7D8A74]">Période std: {collar.baseTransmissionMinutes >= 60 && collar.baseTransmissionMinutes % 60 === 0 ? `${collar.baseTransmissionMinutes / 60} h` : `${collar.baseTransmissionMinutes || 30} min`}</span>
                     </div>
                   )}
                 </div>
@@ -201,7 +201,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                     <div className="flex items-center space-x-2 text-xs text-amber-900">
                       <Zap className="w-4 h-4 text-[#E67E22] animate-bounce" />
                       <div>
-                        <span className="font-bold block text-[#D35400]">PUSH Actif ({collar.pushMode.intervalSeconds}s)</span>
+                        <span className="font-bold block text-[#D35400]">PUSH Actif ({collar.pushMode.intervalSeconds >= 60 ? `${collar.pushMode.intervalSeconds / 60} min` : `${collar.pushMode.intervalSeconds}s`})</span>
                         <span className="text-[10px] text-stone-600">{collar.pushMode.durationMinutes} min ordonnées</span>
                       </div>
                     </div>

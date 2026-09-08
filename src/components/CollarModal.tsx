@@ -41,6 +41,8 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   const [mode, setMode] = useState<'simulation' | 'real'>('simulation');
   const [status, setStatus] = useState<'active' | 'inactive' | 'maintenance'>('active');
   const [notes, setNotes] = useState('');
+  const [baseTransmissionValue, setBaseTransmissionValue] = useState<string>('30');
+  const [baseTransmissionUnit, setBaseTransmissionUnit] = useState<'minutes' | 'heures'>('minutes');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -63,6 +65,14 @@ export const CollarModal: React.FC<CollarModalProps> = ({
       'active'
     );
     setNotes(initialCollar?.notes || '');
+    const baseMinutes = initialCollar?.baseTransmissionMinutes || 30;
+    if (baseMinutes % 60 === 0) {
+      setBaseTransmissionValue(String(baseMinutes / 60));
+      setBaseTransmissionUnit('heures');
+    } else {
+      setBaseTransmissionValue(String(baseMinutes));
+      setBaseTransmissionUnit('minutes');
+    }
   }, [isOpen, initialCollar, zones]);
 
   if (!isOpen) return null;
@@ -70,6 +80,11 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sheepName.trim() || !collarNumber.trim() || saving) return;
+
+    const rawBase = Number(baseTransmissionValue);
+    const baseTransmissionMinutes = Number.isFinite(rawBase) && rawBase > 0
+      ? Math.max(1, Math.round(baseTransmissionUnit === 'heures' ? rawBase * 60 : rawBase))
+      : 30;
 
     setSaving(true);
     try {
@@ -85,6 +100,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
         mode,
         status,
         notes: notes.trim() || undefined,
+        baseTransmissionMinutes,
       });
 
       if (saved) onClose();
@@ -279,6 +295,33 @@ export const CollarModal: React.FC<CollarModalProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="bg-[#F2F4F1] border border-[#E2E6DF] rounded-xl p-3">
+            <label className={`${labelClass} flex items-center space-x-1`}>
+              <Radio className="w-3.5 h-3.5 text-[#5A6F4E]" />
+              <span>Cadence standard d’émission</span>
+            </label>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={baseTransmissionValue}
+                onChange={(e) => setBaseTransmissionValue(e.target.value)}
+                className={inputClass}
+                placeholder="30"
+              />
+              <select
+                value={baseTransmissionUnit}
+                onChange={(e) => setBaseTransmissionUnit(e.target.value as 'minutes' | 'heures')}
+                className={inputClass}
+              >
+                <option value="minutes">minutes</option>
+                <option value="heures">heures</option>
+              </select>
+            </div>
+            <p className="text-[10px] text-[#7D8A74] mt-1">Cadence utilisée par défaut quand aucun PUSH temporaire n’est actif.</p>
           </div>
 
           <div>

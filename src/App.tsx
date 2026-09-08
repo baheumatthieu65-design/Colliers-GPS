@@ -600,7 +600,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <span className="font-medium text-[#3E4A35]">Pâtur'GPS App Mobile © 2026 - PWA Pastorale - By Matth tous droits réservés</span>
             <span className="text-[#7D8A74]">
-              Cadence standard : 30 min | Cadence Push : 15s-60s + au choix | Synchronisation Cloud BDD
+              Cadence standard : selon le collier | Cadence Push : 5-30 min + personnalisée | Synchronisation Cloud BDD
             </span>
           </div>
         </footer>
