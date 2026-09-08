@@ -281,20 +281,66 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
 
+    // Orientation du téléphone : on utilise une seule source à la fois et
+    // un lissage circulaire pour éviter les sauts/clignotements du compas.
+    let orientationSource: 'absolute' | 'relative' | null = null;
+    let smoothedHeading: number | null = userHeadingRef.current;
+    let lastOrientationUpdate = 0;
+
+    const circularDifference = (from: number, to: number) => {
+      return ((to - from + 540) % 360) - 180;
+    };
+
     const onOrientation = (event: DeviceOrientationEvent) => {
-      const alpha = typeof event.alpha === 'number' ? event.alpha : null;
-      if (alpha === null) return;
-      // Alpha is clockwise from north on the absolute orientation event.
-      // The previous 360-alpha formula inverted east/west and flipped south to north.
-      const screenAngle = Number((window.screen as any)?.orientation?.angle || 0);
-      const heading = (alpha + screenAngle + 360) % 360;
-      userHeadingRef.current = heading;
+      // Les événements absolus sont traités uniquement par le listener dédié.
+      if (event.absolute === true) return;
+      const now = performance.now();
+      if (now - lastOrientationUpdate < 80) return;
+
+      let heading: number | null = null;
+      const webkitHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
+
+      // iOS fournit directement le cap magnétique en degrés.
+      if (typeof webkitHeading === 'number' && Number.isFinite(webkitHeading)) {
+        heading = webkitHeading;
+        orientationSource = 'absolute';
+      } else if (event.absolute === true && typeof event.alpha === 'number' && Number.isFinite(event.alpha)) {
+        // Pour un événement absolu Android, alpha augmente dans le sens
+        // horaire : le cap de la partie haute du téléphone est 360 - alpha.
+        heading = (360 - event.alpha) % 360;
+        orientationSource = 'absolute';
+      } else if (typeof event.alpha === 'number' && Number.isFinite(event.alpha)) {
+        // Repli uniquement si aucun flux absolu n'est disponible.
+        heading = (360 - event.alpha) % 360;
+        orientationSource = 'relative';
+      }
+
+      if (heading === null) return;
+
+      // Lissage circulaire : 15 % du nouvel angle seulement.
+      if (smoothedHeading === null) {
+        smoothedHeading = heading;
+      } else {
+        smoothedHeading = (smoothedHeading + circularDifference(smoothedHeading, heading) * 0.15 + 360) % 360;
+      }
+
+      lastOrientationUpdate = now;
+      const stableHeading = smoothedHeading;
+      userHeadingRef.current = stableHeading;
+
       const marker = userLocationMarkerRef.current;
       if (!marker) return;
       const pos = marker.getLatLng();
-      updateUserMarker(pos.lat, pos.lng, heading);
+      updateUserMarker(pos.lat, pos.lng, stableHeading);
     };
-    window.addEventListener('deviceorientationabsolute', onOrientation as EventListener, true);
+
+    const onAbsoluteOrientation = (event: DeviceOrientationEvent) => {
+      if (event.absolute !== true) return;
+      onOrientation(event);
+    };
+
+    // Un seul flux : absolu en priorité. Le flux classique sert de repli.
+    window.addEventListener('deviceorientationabsolute', onAbsoluteOrientation as EventListener, true);
     window.addEventListener('deviceorientation', onOrientation, true);
 
     return () => {
