@@ -259,7 +259,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const updateUserMarker = (lat: number, lng: number, heading?: number | null) => {
       const map = mapRef.current;
       if (!map || !isValidCoordinate(lat) || !isValidCoordinate(lng)) return;
-      if (typeof heading === 'number' && Number.isFinite(heading)) userHeadingRef.current = heading;
+      if (typeof heading === 'number' && Number.isFinite(heading)) userHeadingRef.current = (heading + 180) % 360;
       const rotation = ((userHeadingRef.current ?? 0) + 180) % 360;
       const html = `
         <div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
@@ -284,7 +284,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const onOrientation = (event: DeviceOrientationEvent) => {
       const alpha = typeof event.alpha === 'number' ? event.alpha : null;
       if (alpha === null) return;
-      const heading = (360 - alpha) % 360;
+      const heading = (540 - alpha) % 360;
       userHeadingRef.current = heading;
       const marker = userLocationMarkerRef.current;
       if (!marker) return;
