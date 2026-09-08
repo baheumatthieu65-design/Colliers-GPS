@@ -15,21 +15,23 @@ async function handlePush(event) {
   const kind = String(data.kind || "").toLowerCase();
   const isDanger = kind === "danger" || /danger/i.test(title);
 
-  const baseOptions = {
+  const options = {
     body,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    vibrate: isDanger ? [1200, 500, 1200, 500, 1200] : [250],
-    requireInteraction: isDanger,
+    vibrate: [1200, 500, 1200, 500, 1200],
+    requireInteraction: true,
     renotify: true,
+    silent: false,
     data: { url: data.url || "/" }
   };
 
   if (!isDanger) {
+    // Notification normale : exactement les mêmes paramètres qu'un DANGER,
+    // mais une seule notification.
     await self.registration.showNotification(title, {
-      ...baseOptions,
-      tag: data.tag || "paturgps-alert-normal",
-      silent: true
+      ...options,
+      tag: data.tag || `paturgps-normal-${data.id || Date.now()}`
     });
     return;
   }
@@ -37,9 +39,8 @@ async function handlePush(event) {
   // DANGER : 10 notifications distinctes, espacées de 2 secondes.
   for (let i = 1; i <= 10; i++) {
     await self.registration.showNotification(`🚨 ${title}`, {
-      ...baseOptions,
-      tag: `paturgps-danger-${data.id || Date.now()}-${i}`,
-      silent: false
+      ...options,
+      tag: `paturgps-danger-${data.id || Date.now()}-${i}`
     });
 
     if (i < 10) {
@@ -50,6 +51,7 @@ async function handlePush(event) {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+
   const url = event.notification.data?.url || "/";
 
   event.waitUntil(
