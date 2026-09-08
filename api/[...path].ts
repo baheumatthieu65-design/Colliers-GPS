@@ -51,18 +51,18 @@ function cors(res: AnyRes) {
 }
 
 function getPath(req: AnyReq) {
-  // Sur Vercel, le paramètre query.path d'une route [...path] peut ne contenir
-  // qu'une partie du chemin selon le runtime. Pour les routes dynamiques
-  // (/api/collars/:id), la source la plus fiable est donc req.url.
+  // Sur Vercel, query.path peut ne contenir qu'une partie du catch-all.
+  // L'URL réelle est donc prioritaire : elle garantit /api/collars/<id>
+  // et /api/zones/<id> pour PUT/DELETE.
   const rawUrl = String(req.url || '');
   let pathOnly = rawUrl.split('?')[0];
 
-  // Si req.url est une URL absolue, récupérer uniquement son pathname.
+  // Si le runtime fournit une URL absolue, ne conserver que son pathname.
   if (/^https?:\/\//i.test(pathOnly)) {
     try {
       pathOnly = new URL(pathOnly).pathname;
     } catch {
-      // On retombe sur le parsing classique ci-dessous.
+      // On retombe sur le nettoyage classique ci-dessous.
     }
   }
 
@@ -71,24 +71,15 @@ function getPath(req: AnyReq) {
     .replace(/^\/+|\/+$/g, '');
 
   if (fromUrl) {
-    try {
-      return decodeURIComponent(fromUrl);
-    } catch {
-      return fromUrl;
-    }
+    try { return decodeURIComponent(fromUrl); } catch { return fromUrl; }
   }
 
-  // Fallback pour les environnements où req.url n'est pas renseigné.
   if (req.query && req.query.path !== undefined) {
     const rawPath = Array.isArray(req.query.path)
       ? req.query.path.join('/')
       : String(req.query.path);
     const cleaned = rawPath.replace(/^\/?api\/?/, '').replace(/^\/+|\/+$/g, '');
-    try {
-      return decodeURIComponent(cleaned);
-    } catch {
-      return cleaned;
-    }
+    try { return decodeURIComponent(cleaned); } catch { return cleaned; }
   }
 
   return '';
@@ -463,7 +454,9 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         return error(res, 409, `Le numéro de collier ${body.collarNumber} existe déjà dans GitHub.`);
       }
 
-      const id = body.id || crypto.randomUUID();
+      const existingIds = new Set(config.data.collars.map((c) => c.id));
+       let id = crypto.randomUUID();
+       while (existingIds.has(id)) id = crypto.randomUUID();
       const collarConfig: GithubCollarConfig = {
         id,
         sheepName: body.sheepName,
@@ -609,7 +602,9 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       }
 
       const config = await readZonesConfig();
-      const id = body.id || crypto.randomUUID();
+      const existingIds = new Set(config.data.zones.map((z) => z.id));
+       let id = crypto.randomUUID();
+       while (existingIds.has(id)) id = crypto.randomUUID();
       const zone: GithubZoneConfig = {
         id,
         name: body.name,
@@ -904,7 +899,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       return res.status(200).json({ ok: true, success: true, collar: { id: collar.id, currentLat: lat, currentLng: lng }, alert });
     }
 
-    return error(res, 404, `Route API inconnue : /api/${path}`);
+    return error(res, 404, `Route API inconnue : /api/${path}`, { method, path, url: req.url || null });
   } catch (e: any) {
     return error(res, 500, 'Erreur serveur Pâtur’GPS V12.', e?.message || e);
   }
