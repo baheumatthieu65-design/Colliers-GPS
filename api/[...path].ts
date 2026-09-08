@@ -306,7 +306,7 @@ function mapCollar(
   config: GithubCollarConfig,
   row: any,
   assignedZoneId?: string | null,
-  latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null },
+  latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
 ) {
   return {
     id: config.id,
@@ -314,7 +314,7 @@ function mapCollar(
     collarNumber: config.collarNumber,
     animalNumber: config.animalNumber || undefined,
     color: config.color || '#5A6F4E',
-    batteryLevel: row?.battery_percent ?? 100,
+    batteryLevel: latestPosition?.batteryPercent ?? row?.battery_percent ?? 100,
     signalQuality: signalQuality(row?.signal_strength),
     lastUpdate: latestPosition?.recordedAt || row?.last_seen || row?.updated_at || row?.created_at || new Date().toISOString(),
     // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
@@ -377,7 +377,7 @@ async function getLatestPositionMap(supabase: any, ids: string[]) {
 
   const { data, error: dbError } = await supabase
     .from('positions')
-    .select('collar_id, latitude, longitude, recorded_at')
+    .select('collar_id, latitude, longitude, recorded_at, battery_percent')
     .in('collar_id', ids)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
@@ -400,6 +400,7 @@ async function getLatestPositionMap(supabase: any, ids: string[]) {
       latitude,
       longitude,
       recordedAt: position?.recorded_at || null,
+      batteryPercent: Number.isFinite(Number(position?.battery_percent)) ? Number(position.battery_percent) : null,
     });
   }
 
