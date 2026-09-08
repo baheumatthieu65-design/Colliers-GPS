@@ -5,8 +5,8 @@
       "id": "6db4ea95-c17a-47f5-92d6-5c66e2892c0f",
       "name": "Montaut",
       "description": "Zone patatoïde tracée manuellement avec 11 sommets",
-      "centerLat": 42.97005197267252,
-      "centerLng": 0.4218812422318892,
+      "centerLat": 42.97025639209812,
+      "centerLng": 0.4221190990867051,
       "radiusMeters": 500,
       "polygonCoords": [
         [
@@ -14,8 +14,8 @@
           0.40263175964355474
         ],
         [
-          42.97815338735815,
-          0.4150772094726563
+          42.98040200103975,
+          0.4176936348756311
         ],
         [
           42.97733704815067,
