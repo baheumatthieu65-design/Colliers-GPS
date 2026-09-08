@@ -10,15 +10,6 @@
       "status": "active",
       "activeZoneId": null,
       "animalNumber": "556"
-    },
-    {
-      "id": "e71435a1-b52a-41a6-9886-ad515b19cd50",
-      "sheepName": "test",
-      "collarNumber": "COL-728",
-      "color": "#EF4444",
-      "mode": "simulation",
-      "status": "active",
-      "activeZoneId": null
     }
   ]
 }
