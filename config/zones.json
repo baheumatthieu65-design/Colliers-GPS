@@ -53,19 +53,6 @@
       "fillVisible": false
     },
     {
-      "id": "56e33ab6-71dc-4016-a899-9f2be3a11824",
-      "name": "Montaut",
-      "description": "",
-      "centerLat": 42.845,
-      "centerLng": -0.015,
-      "radiusMeters": 500,
-      "assignedCollarIds": [],
-      "color": "#10B981",
-      "active": true,
-      "alertOnExit": true,
-      "fillVisible": false
-    },
-    {
       "id": "cd4918b3-1220-4245-a1a4-d03caf65599e",
       "name": "Montaut",
       "description": "Zone patatoïde tracée manuellement avec 16 sommets",
