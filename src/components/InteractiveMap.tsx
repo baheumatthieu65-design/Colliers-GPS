@@ -274,7 +274,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const map = mapRef.current;
       if (!map || !isValidCoordinate(lat) || !isValidCoordinate(lng)) return;
       if (typeof heading === 'number' && Number.isFinite(heading)) userHeadingRef.current = (heading + 180) % 360;
-      const rotation = ((userHeadingRef.current ?? 0) + 180) % 360;
+      // Correction demandée : N→E, E→S, S→O, O→N (+90°).
+      const rotation = ((userHeadingRef.current ?? 0) + 270) % 360;
       const html = `
         <div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
           <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 100%;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #1677ff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));"></div>
