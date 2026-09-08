@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-  const isVercel = process.env.VERCEL === '1';
+  const isVercel = mode === 'vercel' || process.env.VERCEL === '1';
   const isCapacitor = mode === 'capacitor';
   const base = isCapacitor ? './' : isVercel ? '/' : '/Colliers-GPS/';
   const publicBase = isCapacitor ? './' : isVercel ? '/' : '/Colliers-GPS/';
