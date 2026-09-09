@@ -170,23 +170,63 @@ function decodeGithubContent(encoded: string) {
   return Buffer.from(encoded.replace(/\n/g, ''), 'base64').toString('utf8');
 }
 
+type GithubJsonCacheEntry = {
+  data: unknown;
+  sha: string | null;
+  expiresAt: number;
+};
+
+// Les routes de lecture sont interrogées très fréquemment par la PWA.
+// Garder la configuration GitHub en mémoire pendant une courte durée évite
+// de consommer inutilement la limite API GitHub à chaque polling.
+// En cas de rate-limit GitHub, on conserve aussi la dernière configuration
+// valide afin que l'application continue de fonctionner normalement.
+const githubJsonCache = new Map<string, GithubJsonCacheEntry>();
+const GITHUB_READ_CACHE_MS = 60_000;
+
 async function githubReadJson<T>(path: string, fallback: T): Promise<{ data: T; sha: string | null; fromGithub: boolean }> {
   if (!githubToken) return { data: fallback, sha: null, fromGithub: false };
 
-  const response = await fetch(githubContentsUrl(path), {
-    headers: githubHeaders(),
-    cache: 'no-store',
-  });
-
-  if (response.status === 404) return { data: fallback, sha: null, fromGithub: true };
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GitHub lecture ${path} impossible (${response.status}) : ${text.slice(0, 300)}`);
+  const cached = githubJsonCache.get(path);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { data: cached.data as T, sha: cached.sha, fromGithub: true };
   }
 
-  const payload = await response.json();
-  const raw = decodeGithubContent(String(payload.content || ''));
-  return { data: JSON.parse(raw) as T, sha: payload.sha || null, fromGithub: true };
+  try {
+    const response = await fetch(githubContentsUrl(path), {
+      headers: githubHeaders(),
+      cache: 'no-store',
+    });
+
+    if (response.status === 404) return { data: fallback, sha: null, fromGithub: true };
+
+    if (!response.ok) {
+      const text = await response.text();
+      if (cached) {
+        console.warn(`[PaturGPS API] GitHub ${path} indisponible (${response.status}), utilisation de la dernière configuration valide.`);
+        return { data: cached.data as T, sha: cached.sha, fromGithub: true };
+      }
+      throw new Error(`GitHub lecture ${path} impossible (${response.status}) : ${text.slice(0, 300)}`);
+    }
+
+    const payload = await response.json();
+    const raw = decodeGithubContent(String(payload.content || ''));
+    const data = JSON.parse(raw) as T;
+
+    githubJsonCache.set(path, {
+      data,
+      sha: payload.sha || null,
+      expiresAt: Date.now() + GITHUB_READ_CACHE_MS,
+    });
+
+    return { data, sha: payload.sha || null, fromGithub: true };
+  } catch (err) {
+    if (cached) {
+      console.warn(`[PaturGPS API] Lecture GitHub ${path} échouée, utilisation de la dernière configuration valide.`);
+      return { data: cached.data as T, sha: cached.sha, fromGithub: true };
+    }
+    throw err;
+  }
 }
 
 async function githubReadFile(path: string): Promise<GithubFile | null> {
@@ -302,24 +342,19 @@ async function readZonesConfig() {
   return githubReadJson<ZonesConfigFile>(ZONES_CONFIG_PATH, emptyZonesConfig);
 }
 
-function mapCollar(
-  config: GithubCollarConfig,
-  row: any,
-  assignedZoneId?: string | null,
-  latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
-) {
+function mapCollar(config: GithubCollarConfig, row: any, assignedZoneId?: string | null) {
   return {
     id: config.id,
     sheepName: config.sheepName,
     collarNumber: config.collarNumber,
     animalNumber: config.animalNumber || undefined,
     color: config.color || '#5A6F4E',
-    batteryLevel: latestPosition?.batteryPercent ?? row?.battery_percent ?? 100,
+    batteryLevel: row?.battery_percent ?? 100,
     signalQuality: signalQuality(row?.signal_strength),
-    lastUpdate: latestPosition?.recordedAt || row?.last_seen || row?.updated_at || row?.created_at || new Date().toISOString(),
-    // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
-    currentLat: latestPosition?.latitude,
-    currentLng: latestPosition?.longitude,
+    // Une position n'est affichée que si une relève GPS réelle existe dans positions.
+    lastUpdate: row?.last_seen || row?.updated_at || row?.created_at || '',
+    currentLat: typeof row?.last_latitude === 'number' && Number.isFinite(row.last_latitude) ? row.last_latitude : undefined,
+    currentLng: typeof row?.last_longitude === 'number' && Number.isFinite(row.last_longitude) ? row.last_longitude : undefined,
     status: config.status === 'inactive' ? 'offline' : 'inside_zone',
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
     pushMode: row?.push_mode
@@ -364,47 +399,55 @@ function mapZone(config: GithubZoneConfig) {
 
 async function getSupabaseCollarMap(supabase: any, ids: string[]) {
   if (!ids.length) return new Map<string, any>();
-  const { data, error: dbError } = await supabase.from('collars').select('*').in('id', ids);
-  if (dbError) throw new Error(`Erreur lecture données techniques des colliers : ${dbError.message}`);
-  return new Map((data || []).map((row: any) => [row.id, row]));
-}
 
-// Dernière position GPS réelle de chaque collier.
-// La table positions est la source de vérité pour l'emplacement affiché sur la carte.
-async function getLatestPositionMap(supabase: any, ids: string[]) {
-  const result = new Map<string, any>();
-  if (!ids.length) return result;
+  const [{ data: collarRows, error: collarError }, { data: positionRows, error: positionError }] = await Promise.all([
+    supabase.from('collars').select('*').in('id', ids),
+    supabase
+      .from('positions')
+      .select('*')
+      .in('collar_id', ids)
+      .order('recorded_at', { ascending: false })
+      .limit(10000),
+  ]);
 
-  const { data, error: dbError } = await supabase
-    .from('positions')
-    .select('collar_id, latitude, longitude, recorded_at, battery_percent')
-    .in('collar_id', ids)
-    .not('latitude', 'is', null)
-    .not('longitude', 'is', null)
-    .order('recorded_at', { ascending: false })
-    .limit(10000);
-
-  if (dbError) {
-    throw new Error(`Erreur lecture des dernières positions GPS : ${dbError.message}`);
+  if (collarError) {
+    throw new Error(`Erreur lecture données techniques des colliers : ${collarError.message}`);
+  }
+  if (positionError) {
+    throw new Error(`Erreur lecture dernière position des colliers : ${positionError.message}`);
   }
 
-  for (const position of data || []) {
-    const collarId = String(position?.collar_id || '');
-    if (!collarId || result.has(collarId)) continue;
-
-    const latitude = Number(position?.latitude);
-    const longitude = Number(position?.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
-
-    result.set(collarId, {
-      latitude,
-      longitude,
-      recordedAt: position?.recorded_at || null,
-      batteryPercent: Number.isFinite(Number(position?.battery_percent)) ? Number(position.battery_percent) : null,
-    });
+  // La carte doit toujours utiliser le dernier point réellement reçu dans
+  // positions, même si la table collars n'a pas encore été mise à jour.
+  const latestByCollar = new Map<string, any>();
+  for (const position of positionRows || []) {
+    if (!latestByCollar.has(position.collar_id)) {
+      latestByCollar.set(position.collar_id, position);
+    }
   }
 
-  return result;
+  return new Map((collarRows || []).map((row: any) => {
+    const latest = latestByCollar.get(row.id);
+    return [row.id, latest ? {
+      ...row,
+      last_latitude: latest.latitude,
+      last_longitude: latest.longitude,
+      last_altitude: latest.altitude,
+      last_accuracy: latest.accuracy,
+      battery_percent: latest.battery_percent ?? row.battery_percent,
+      signal_strength: latest.signal_strength ?? row.signal_strength,
+      last_seen: latest.recorded_at,
+    } : {
+      ...row,
+      // Pas de position dans positions : aucune coordonnée ne doit être
+      // utilisée pour placer la brebis sur la carte.
+      last_latitude: undefined,
+      last_longitude: undefined,
+      last_altitude: undefined,
+      last_accuracy: undefined,
+      last_seen: undefined,
+    }];
+  }));
 }
 
 async function mirrorZoneToSupabase(supabase: any, zone: GithubZoneConfig) {
@@ -537,10 +580,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
     if (path === 'collars' && method === 'GET') {
       const config = await readCollarsConfig();
       const ids = config.data.collars.map((c) => c.id);
-      const [rows, latestPositions] = await Promise.all([
-        getSupabaseCollarMap(supabase, ids),
-        getLatestPositionMap(supabase, ids),
-      ]);
+      const rows = await getSupabaseCollarMap(supabase, ids);
 
       const zoneByCollar = new Map<string, string>();
       const zones = await readZonesConfig();
@@ -551,9 +591,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       }
 
       return res.status(200).json(
-        config.data.collars.map((c) =>
-          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
-        )
+        config.data.collars.map((c) => mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id)))
       );
     }
 
