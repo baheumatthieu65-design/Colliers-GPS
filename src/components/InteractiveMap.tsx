@@ -274,8 +274,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const map = mapRef.current;
       if (!map || !isValidCoordinate(lat) || !isValidCoordinate(lng)) return;
       if (typeof heading === 'number' && Number.isFinite(heading)) userHeadingRef.current = (heading + 180) % 360;
-      // Correction demandée : N→E, E→S, S→O, O→N (+90°).
-      const rotation = ((userHeadingRef.current ?? 0) + 270) % 360;
+      const rotation = ((userHeadingRef.current ?? 0) + 180) % 360;
       const html = `
         <div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
           <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 100%;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:18px solid #1677ff;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));"></div>
@@ -1887,15 +1886,23 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   <span className="font-semibold text-[#2C3327] text-xs">
                     {
                       selectedCollar.lastUpdate
-                        ? new Date(
-                            selectedCollar.lastUpdate
-                          ).toLocaleTimeString(
-                            [],
-                            {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            }
-                          )
+                        ? (() => {
+                            const date = new Date(selectedCollar.lastUpdate);
+                            const now = new Date();
+                            const yesterday = new Date(now);
+                            yesterday.setDate(now.getDate() - 1);
+                            const sameDay = (a: Date, b: Date) =>
+                              a.getFullYear() === b.getFullYear() &&
+                              a.getMonth() === b.getMonth() &&
+                              a.getDate() === b.getDate();
+                            const label = sameDay(date, now)
+                              ? 'Auj.'
+                              : sameDay(date, yesterday)
+                              ? 'Hier'
+                              : date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                            const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            return `${label} ${time}`;
+                          })()
                         : '--:--'
                     }
                   </span>
