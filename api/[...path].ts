@@ -206,7 +206,8 @@ async function githubReadJson<T>(path: string, fallback: T): Promise<{ data: T; 
         console.warn(`[PaturGPS API] GitHub ${path} indisponible (${response.status}), utilisation de la dernière configuration valide.`);
         return { data: cached.data as T, sha: cached.sha, fromGithub: true };
       }
-      throw new Error(`GitHub lecture ${path} impossible (${response.status}) : ${text.slice(0, 300)}`);
+      console.warn(`[PaturGPS API] GitHub ${path} indisponible (${response.status}), utilisation de la configuration locale de secours.`);
+      return { data: fallback, sha: null, fromGithub: false };
     }
 
     const payload = await response.json();
@@ -225,7 +226,8 @@ async function githubReadJson<T>(path: string, fallback: T): Promise<{ data: T; 
       console.warn(`[PaturGPS API] Lecture GitHub ${path} échouée, utilisation de la dernière configuration valide.`);
       return { data: cached.data as T, sha: cached.sha, fromGithub: true };
     }
-    throw err;
+    console.warn(`[PaturGPS API] Lecture GitHub ${path} échouée, utilisation de la configuration locale de secours.`);
+    return { data: fallback, sha: null, fromGithub: false };
   }
 }
 
@@ -331,18 +333,68 @@ type GithubZoneConfig = {
 type CollarsConfigFile = { version: number; collars: GithubCollarConfig[] };
 type ZonesConfigFile = { version: number; zones: GithubZoneConfig[] };
 
-const emptyCollarsConfig: CollarsConfigFile = { version: 1, collars: [] };
-const emptyZonesConfig: ZonesConfigFile = { version: 1, zones: [] };
+const fallbackCollarsConfig: CollarsConfigFile = {
+  version: 1,
+  collars: [{
+    id: 'ff843b96-8b9d-46e8-95bb-253e40f94d97',
+    sheepName: 'Fanny',
+    collarNumber: 'COL-1',
+    color: '#EF4444',
+    mode: 'simulation',
+    status: 'active',
+    activeZoneId: '6db4ea95-c17a-47f5-92d6-5c66e2892c0f',
+    baseTransmissionMinutes: 60,
+    animalNumber: '456-244',
+  }],
+};
+
+const fallbackZonesConfig: ZonesConfigFile = {
+  version: 1,
+  zones: [{
+    id: '6db4ea95-c17a-47f5-92d6-5c66e2892c0f',
+    name: 'Montaut',
+    description: 'Zone patatoïde tracée manuellement avec 11 sommets',
+    centerLat: 42.970209500724984,
+    centerLng: 0.4217509643785659,
+    radiusMeters: 500,
+    polygonCoords: [
+      [42.977274252378116, 0.40263175964355474],
+      [42.980043184528625, 0.41312319189415364],
+      [42.977180059557256, 0.4258978532817893],
+      [42.97419718096634, 0.4343032836914063],
+      [42.96672365223365, 0.44108390808105474],
+      [42.96163610904843, 0.4411697387695313],
+      [42.95849544028007, 0.43627738952636724],
+      [42.96521627589293, 0.4228878021240235],
+      [42.966346811611274, 0.4134464263916016],
+      [42.97118275764097, 0.40640830993652344],
+      [42.974008783837114, 0.40203094482421875],
+    ],
+    assignedCollarIds: ['ff843b96-8b9d-46e8-95bb-253e40f94d97'],
+    color: '#10B981',
+    active: true,
+    alertOnExit: true,
+    fillVisible: false,
+  }],
+};
+
+const emptyCollarsConfig: CollarsConfigFile = fallbackCollarsConfig;
+const emptyZonesConfig: ZonesConfigFile = fallbackZonesConfig;
 
 async function readCollarsConfig() {
-  return githubReadJson<CollarsConfigFile>(COLLARS_CONFIG_PATH, emptyCollarsConfig);
+  return githubReadJson<CollarsConfigFile>(COLLARS_CONFIG_PATH, fallbackCollarsConfig);
 }
 
 async function readZonesConfig() {
-  return githubReadJson<ZonesConfigFile>(ZONES_CONFIG_PATH, emptyZonesConfig);
+  return githubReadJson<ZonesConfigFile>(ZONES_CONFIG_PATH, fallbackZonesConfig);
 }
 
-function mapCollar(config: GithubCollarConfig, row: any, assignedZoneId?: string | null) {
+function mapCollar(
+  config: GithubCollarConfig,
+  row: any,
+  assignedZoneId?: string | null,
+  latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null },
+) {
   return {
     id: config.id,
     sheepName: config.sheepName,
@@ -351,10 +403,10 @@ function mapCollar(config: GithubCollarConfig, row: any, assignedZoneId?: string
     color: config.color || '#5A6F4E',
     batteryLevel: row?.battery_percent ?? 100,
     signalQuality: signalQuality(row?.signal_strength),
-    // Une position n'est affichée que si une relève GPS réelle existe dans positions.
-    lastUpdate: row?.last_seen || row?.updated_at || row?.created_at || '',
-    currentLat: typeof row?.last_latitude === 'number' && Number.isFinite(row.last_latitude) ? row.last_latitude : undefined,
-    currentLng: typeof row?.last_longitude === 'number' && Number.isFinite(row.last_longitude) ? row.last_longitude : undefined,
+    lastUpdate: latestPosition?.recordedAt || row?.last_seen || row?.updated_at || row?.created_at || new Date().toISOString(),
+    // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
+    currentLat: latestPosition?.latitude,
+    currentLng: latestPosition?.longitude,
     status: config.status === 'inactive' ? 'offline' : 'inside_zone',
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
     pushMode: row?.push_mode
@@ -399,55 +451,46 @@ function mapZone(config: GithubZoneConfig) {
 
 async function getSupabaseCollarMap(supabase: any, ids: string[]) {
   if (!ids.length) return new Map<string, any>();
+  const { data, error: dbError } = await supabase.from('collars').select('*').in('id', ids);
+  if (dbError) throw new Error(`Erreur lecture données techniques des colliers : ${dbError.message}`);
+  return new Map((data || []).map((row: any) => [row.id, row]));
+}
 
-  const [{ data: collarRows, error: collarError }, { data: positionRows, error: positionError }] = await Promise.all([
-    supabase.from('collars').select('*').in('id', ids),
-    supabase
-      .from('positions')
-      .select('*')
-      .in('collar_id', ids)
-      .order('recorded_at', { ascending: false })
-      .limit(10000),
-  ]);
+// Dernière position GPS réelle de chaque collier.
+// La table positions est la source de vérité pour l'emplacement affiché sur la carte.
+async function getLatestPositionMap(supabase: any, ids: string[]) {
+  const result = new Map<string, any>();
+  if (!ids.length) return result;
 
-  if (collarError) {
-    throw new Error(`Erreur lecture données techniques des colliers : ${collarError.message}`);
-  }
-  if (positionError) {
-    throw new Error(`Erreur lecture dernière position des colliers : ${positionError.message}`);
-  }
+  const { data, error: dbError } = await supabase
+    .from('positions')
+    .select('collar_id, latitude, longitude, recorded_at')
+    .in('collar_id', ids)
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null)
+    .order('recorded_at', { ascending: false })
+    .limit(10000);
 
-  // La carte doit toujours utiliser le dernier point réellement reçu dans
-  // positions, même si la table collars n'a pas encore été mise à jour.
-  const latestByCollar = new Map<string, any>();
-  for (const position of positionRows || []) {
-    if (!latestByCollar.has(position.collar_id)) {
-      latestByCollar.set(position.collar_id, position);
-    }
+  if (dbError) {
+    throw new Error(`Erreur lecture des dernières positions GPS : ${dbError.message}`);
   }
 
-  return new Map((collarRows || []).map((row: any) => {
-    const latest = latestByCollar.get(row.id);
-    return [row.id, latest ? {
-      ...row,
-      last_latitude: latest.latitude,
-      last_longitude: latest.longitude,
-      last_altitude: latest.altitude,
-      last_accuracy: latest.accuracy,
-      battery_percent: latest.battery_percent ?? row.battery_percent,
-      signal_strength: latest.signal_strength ?? row.signal_strength,
-      last_seen: latest.recorded_at,
-    } : {
-      ...row,
-      // Pas de position dans positions : aucune coordonnée ne doit être
-      // utilisée pour placer la brebis sur la carte.
-      last_latitude: undefined,
-      last_longitude: undefined,
-      last_altitude: undefined,
-      last_accuracy: undefined,
-      last_seen: undefined,
-    }];
-  }));
+  for (const position of data || []) {
+    const collarId = String(position?.collar_id || '');
+    if (!collarId || result.has(collarId)) continue;
+
+    const latitude = Number(position?.latitude);
+    const longitude = Number(position?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+
+    result.set(collarId, {
+      latitude,
+      longitude,
+      recordedAt: position?.recorded_at || null,
+    });
+  }
+
+  return result;
 }
 
 async function mirrorZoneToSupabase(supabase: any, zone: GithubZoneConfig) {
@@ -580,7 +623,10 @@ export default async function handler(req: AnyReq, res: AnyRes) {
     if (path === 'collars' && method === 'GET') {
       const config = await readCollarsConfig();
       const ids = config.data.collars.map((c) => c.id);
-      const rows = await getSupabaseCollarMap(supabase, ids);
+      const [rows, latestPositions] = await Promise.all([
+        getSupabaseCollarMap(supabase, ids),
+        getLatestPositionMap(supabase, ids),
+      ]);
 
       const zoneByCollar = new Map<string, string>();
       const zones = await readZonesConfig();
@@ -591,7 +637,9 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       }
 
       return res.status(200).json(
-        config.data.collars.map((c) => mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id)))
+        config.data.collars.map((c) =>
+          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
+        )
       );
     }
 
