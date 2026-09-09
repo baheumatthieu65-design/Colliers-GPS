@@ -12,6 +12,28 @@ interface CollarManagerProps {
   onStopPushForCollar: (collarId: string) => void;
 }
 
+function formatLastGpsDate(value: string | null | undefined, hasGps: boolean) {
+  if (!hasGps || !value) return 'Aucune donnée GPS';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date inconnue';
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dateDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((today.getTime() - dateDay.getTime()) / 86400000);
+
+  const time = date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  if (diffDays === 0) return `Auj. ${time}`;
+  if (diffDays === 1) return `Hier ${time}`;
+
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')} ${time}`;
+}
+
 export const CollarManager: React.FC<CollarManagerProps> = ({
   collars,
   zones,
@@ -82,6 +104,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
         {collars.map((collar) => {
           const assignedZone = zones.find(z => z.id === collar.activeZoneId);
           const isOutOfZone = collar.status === 'out_of_zone';
+          const hasGps = Number.isFinite(Number(collar.currentLat)) && Number.isFinite(Number(collar.currentLng));
 
           return (
             <div
@@ -109,7 +132,6 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* ACTIONS: large, explicit buttons. No parent click handler, no overlay. */}
                   <div className="flex shrink-0 items-center gap-1 relative z-10">
                     <button
                       type="button"
@@ -161,11 +183,14 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                       <span className="font-semibold text-[#2C3327]">{collar.batteryLevel}%</span>
                     </div>
                   </div>
+
                   <div className="bg-[#F2F4F1] p-2 rounded-xl border border-[#E2E6DF] flex items-center space-x-2">
                     <Signal className="w-4 h-4 text-[#5A6F4E]" />
-                    <div>
-                      <span className="text-[#7D8A74] block text-[10px]">Signal GPS</span>
-                      <span className="font-semibold text-[#2C3327]">{collar.signalQuality}</span>
+                    <div className="min-w-0">
+                      <span className="text-[#7D8A74] block text-[10px]">Dernière donnée GPS</span>
+                      <span className="font-semibold text-[#2C3327] truncate block">
+                        {formatLastGpsDate(collar.lastUpdate, hasGps)}
+                      </span>
                     </div>
                   </div>
                 </div>
