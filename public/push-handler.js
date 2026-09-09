@@ -26,9 +26,16 @@ async function handlePush(event) {
     data: { url: data.url || "/" }
   };
 
+  // IMPORTANT PWA/Android:
+  // Set the installed PWA app badge from the service worker itself.
+  // This runs even when the PWA page is not open.
+  try {
+    if ("setAppBadge" in self.registration) {
+      await self.registration.setAppBadge(1);
+    }
+  } catch (_) {}
+
   if (!isDanger) {
-    // Notification normale : exactement les mêmes paramètres qu'un DANGER,
-    // mais une seule notification.
     await self.registration.showNotification(title, {
       ...options,
       tag: data.tag || `paturgps-normal-${data.id || Date.now()}`
