@@ -348,6 +348,21 @@ export default function App() {
 
   const activeAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
 
+  // Badge de l'icône de la PWA : nombre d'alertes non acquittées.
+  // Le navigateur/OS décide si le badge est disponible sur l'écran d'accueil.
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      setAppBadge?: (count?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+
+    if (activeAlertsCount > 0 && nav.setAppBadge) {
+      void nav.setAppBadge(activeAlertsCount).catch(() => undefined);
+    } else if (activeAlertsCount === 0 && nav.clearAppBadge) {
+      void nav.clearAppBadge().catch(() => undefined);
+    }
+  }, [activeAlertsCount]);
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative">
         
