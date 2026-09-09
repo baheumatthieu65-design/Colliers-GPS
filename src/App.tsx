@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GPSCollar, GeofenceZone, GeofenceAlert, GPSPositionLog, shortId } from './types';
 import { Navbar } from './components/Navbar';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { InteractiveMap } from './components/InteractiveMap';
 import { CollarManager } from './components/CollarManager';
 import { CollarModal } from './components/CollarModal';
@@ -17,7 +16,7 @@ import { AlertsTable } from './components/AlertsTable';
 import { TrackHistory } from './components/TrackHistory';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { Radio, ShieldAlert, Zap, Compass, CheckCircle2, Bell as BellIcon } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Bell as BellIcon } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'map' | 'collars' | 'zones' | 'alerts' | 'history'>('map');
@@ -313,25 +312,6 @@ export default function App() {
     }
   };
 
-  // Trigger simulated out of zone alert
-  const handleTriggerSimulatedAlert = async () => {
-    try {
-      const res = await fetch('/api/simulation/trigger-out-of-zone', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collarId: collars[0]?.id }),
-      });
-      if (res.ok) {
-        showNotification('⚠️ ALERTE DÉCLENCHÉE: La brebis a franchi la clôture virtuelle !');
-        fetchCollars();
-        fetchAlerts();
-        setActiveTab('map');
-      }
-    } catch (err) {
-      console.error('Error triggering alert simulation:', err);
-    }
-  };
-
   // Sécurité des actions collier : capture native au niveau document.
   // Cela évite qu'un conteneur/une couche responsive intercepte le clic avant React.
   useEffect(() => {
@@ -369,7 +349,7 @@ export default function App() {
   const activeAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
 
   return (
-    <div className="min-h-screen bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative">
         
         {/* Offline Indicator Toast */}
         <OfflineIndicator />
@@ -397,18 +377,11 @@ export default function App() {
             setPushModalCollarId(null);
             setIsPushModalOpen(true);
           }}
-          onTriggerSimulatedAlert={handleTriggerSimulatedAlert}
           onOpenAlerts={() => setIsAlertsPopupOpen(true)}
         />
 
-        <div className="px-2 sm:px-4 pt-2">
-          <div className="max-w-7xl mx-auto flex justify-end">
-            <PWAInstallButton />
-          </div>
-        </div>
-
         {/* Main Application Canvas View */}
-        <main className={`flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 pb-20 md:pb-4 ${activeTab === 'map' ? 'space-y-2 overflow-hidden' : 'space-y-2 sm:space-y-3'}`}>
+        <main className={`flex-1 max-w-7xl w-full min-w-0 mx-auto p-2 sm:p-4 pb-20 md:pb-4 ${activeTab === 'map' ? 'space-y-2 overflow-hidden' : 'space-y-2 sm:space-y-3'}`}>
           
           {/* Compact Active Alert Banner */}
           {activeAlertsCount > 0 && activeTab !== 'alerts' && (

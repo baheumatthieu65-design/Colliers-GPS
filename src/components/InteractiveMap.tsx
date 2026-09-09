@@ -115,6 +115,31 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const selectedCollar =
     collars.find(c => c.id === selectedCollarId);
 
+  const [activeAlertCollarIds, setActiveAlertCollarIds] =
+    useState<string[]>([]);
+
+  // Relit uniquement les alertes actives pour afficher la cloche sur la carte.
+  useEffect(() => {
+    let cancelled = false;
+    const loadActiveAlerts = async () => {
+      try {
+        const res = await fetch('/api/alerts', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data)) return;
+        const ids = data
+          .filter((alert: any) => alert?.status === 'ACTIVE' && alert?.collarId)
+          .map((alert: any) => String(alert.collarId));
+        setActiveAlertCollarIds(Array.from(new Set(ids)));
+      } catch {
+        // La carte reste utilisable si la lecture des alertes échoue.
+      }
+    };
+    void loadActiveAlerts();
+    const interval = setInterval(loadActiveAlerts, 3500);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   /*
    * ============================================================
    * FONDS DE CARTE
@@ -844,6 +869,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </span>
 
             ${
+              activeAlertCollarIds.includes(collar.id)
+                ? '<span aria-label="Alerte active" title="Alerte active" style="color:#EF233C;font-size:13px;line-height:1;">🔔</span>'
+                : ''
+            }
+
+            ${
               collar.pushMode?.active
                 ? '⚡'
                 : ''
@@ -973,6 +1004,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     selectedCollarId,
     hiddenCollarIds,
     onSelectCollar,
+    activeAlertCollarIds,
   ]);
 
   /*
@@ -1720,7 +1752,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             SÉLECTEUR FOND DE CARTE
             ================================================== */}
 
-        <div className="absolute bottom-3 right-3 z-30 flex flex-col items-end">
+        <div className="hidden sm:flex absolute bottom-3 right-3 z-30 flex-col items-end">
 
           {isTileMenuOpen && (
             <div className="mb-2 bg-white/95 backdrop-blur-md p-2 rounded-2xl border border-[#E2E6DF] shadow-xl flex flex-col space-y-1.5 text-xs text-[#2C3327] min-w-[170px] animate-fade-in">

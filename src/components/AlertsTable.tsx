@@ -7,12 +7,14 @@ import {
   Download, 
   Clock, 
   Radio, 
-  Filter
+  Filter,
+  CheckCircle2,
+  MapPin
 } from 'lucide-react';
 
 interface AlertsTableProps {
   alerts: GeofenceAlert[];
-  onResolveAlert: (alertId: string) => void;
+  onResolveAlert: (alertId: string) => void | Promise<void>;
   onLocateOnMap?: (lat: number, lng: number) => void;
   onClearResolvedAlerts?: () => void;
 }
@@ -25,6 +27,19 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED'>('ALL');
+  const [isResolvingAll, setIsResolvingAll] = useState(false);
+
+  const activeAlerts = alerts.filter(a => a.status === 'ACTIVE');
+
+  const handleResolveAll = async () => {
+    if (!activeAlerts.length || isResolvingAll) return;
+    setIsResolvingAll(true);
+    try {
+      await Promise.all(activeAlerts.map(alert => onResolveAlert(alert.id)));
+    } finally {
+      setIsResolvingAll(false);
+    }
+  };
 
   const filteredAlerts = alerts.filter(alert => {
     const matchesSearch = 
@@ -64,7 +79,7 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full max-w-full min-w-0 space-y-4 overflow-x-hidden">
       
       {/* Filters & Export Toolbar */}
       <div className="bg-white border border-[#E2E6DF] p-4 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-sm">
@@ -82,7 +97,7 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
         </div>
 
         {/* Status Filter & Export Button */}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <div className="flex items-center space-x-1 bg-[#F2F4F1] p-1 rounded-xl border border-[#E2E6DF] text-xs">
             <Filter className="w-3.5 h-3.5 text-[#7D8A74] ml-1.5" />
             <button
@@ -130,12 +145,68 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
             <Download className="w-3.5 h-3.5 text-[#5A6F4E]" />
             <span className="hidden sm:inline">Export CSV</span>
           </button>
+
+          <button
+            type="button"
+            onClick={handleResolveAll}
+            disabled={!activeAlerts.length || isResolvingAll}
+            className="flex items-center justify-center gap-1.5 bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white border border-[#5A6F4E] px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-40"
+            title="Acquitter toutes les alertes actives"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Tout acquitté</span>
+          </button>
         </div>
 
       </div>
 
+      {/* PWA : affichage en cartes, sans défilement horizontal. */}
+      <div className="sm:hidden space-y-2">
+        {filteredAlerts.map((alert) => {
+          const isActive = alert.status === 'ACTIVE';
+          return (
+            <div key={alert.id} className={`w-full min-w-0 rounded-2xl border p-3 ${isActive ? 'border-red-200 bg-red-50/70' : 'border-[#E2E6DF] bg-white'}`}>
+              <div className="flex items-start gap-2.5 min-w-0">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isActive ? 'bg-red-100 text-red-600' : 'bg-[#F2F4F1] text-[#5A6F4E]'}`}>
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-[#2C3327] truncate">{alert.sheepName || 'Brebis inconnue'}</div>
+                      <div className="text-[10px] text-[#7D8A74] font-mono">{alert.collarNumber || 'Collier inconnu'}</div>
+                    </div>
+                    <span className={`shrink-0 text-[9px] font-bold px-2 py-1 rounded-full ${isActive ? 'bg-red-600 text-white' : 'bg-[#D8E0D5] text-[#3E4A35]'}`}>
+                      {isActive ? 'ACTIVE' : 'ACQUITTÉE'}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-[#3E4A35] font-semibold">Sortie de zone</div>
+                  <div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#7D8A74]">
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span>{new Date(alert.timestamp).toLocaleString('fr-FR')}</span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-[#5A6F4E] truncate">Zone : {alert.zoneName || 'Zone Principale'}</div>
+                  <p className="mt-1.5 text-[11px] text-[#5E6659] break-words">{alert.message}</p>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    {onLocateOnMap && (
+                      <button type="button" onClick={() => onLocateOnMap(alert.lat, alert.lng)} className="flex-1 flex items-center justify-center gap-1.5 bg-[#F2F4F1] text-[#3E4A35] px-2.5 py-2 rounded-lg text-[10px] font-semibold border border-[#E2E6DF]">
+                        <MapPin className="w-3 h-3" /> Carte
+                      </button>
+                    )}
+                    {isActive && (
+                      <button type="button" onClick={() => onResolveAlert(alert.id)} className="flex-1 bg-[#5A6F4E] text-white px-2.5 py-2 rounded-lg text-[10px] font-bold">Acquitter</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {filteredAlerts.length === 0 && <div className="bg-white border border-[#E2E6DF] rounded-2xl p-8 text-center text-[#7D8A74] text-xs">Aucune alerte correspondant à vos critères.</div>}
+      </div>
+
       {/* Alerts Table */}
-      <div className="bg-white border border-[#E2E6DF] rounded-2xl overflow-hidden shadow-sm">
+      <div className="hidden sm:block bg-white border border-[#E2E6DF] rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -170,7 +241,7 @@ export const AlertsTable: React.FC<AlertsTableProps> = ({
 
                     {/* Sheep Name & Collar */}
                     <td className="py-3.5 px-4 font-semibold text-[#2C3327] whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                         <span className="text-base">🐑</span>
                         <div>
                           <span>{alert.sheepName || 'Brebis inconnue'}</span>

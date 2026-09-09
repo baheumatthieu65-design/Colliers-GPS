@@ -5,7 +5,6 @@ import {
   Compass, 
   History, 
   Sliders, 
-  Activity, 
   MapPin, 
   Layers,
   Zap,
@@ -21,7 +20,6 @@ interface NavbarProps {
   alerts: GeofenceAlert[];
   onOpenAddCollar: () => void;
   onOpenPushModal: () => void;
-  onTriggerSimulatedAlert: () => void;
   onOpenAlerts?: () => void;
 }
 
@@ -32,7 +30,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   zones,
   alerts,
   onOpenPushModal,
-  onTriggerSimulatedAlert,
   onOpenAlerts,
 }) => {
   const activeAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
@@ -118,14 +115,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden xs:inline">PUSH</span>
             </button>
 
-            <button
-              onClick={onTriggerSimulatedAlert}
-              className="hidden sm:flex items-center space-x-1 bg-[#F2F4F1] hover:bg-[#E2E6DF] text-[#3E4A35] text-xs px-2.5 py-1.5 rounded-xl border border-[#E2E6DF] font-medium transition-all cursor-pointer"
-              title="Tester une alerte de sortie de zone"
-            >
-              <Activity className="w-3.5 h-3.5 text-red-500" />
-              <span>Test Alerte</span>
-            </button>
           </div>
         </div>
 
