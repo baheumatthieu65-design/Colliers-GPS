@@ -150,17 +150,17 @@
       "fillVisible": false
     },
     {
-      "id": "c970732b-c5e1-4f87-b9e9-8cbbb80a4cf0",
+      "id": "4b5bb61d-6796-4795-8e3a-8cdf986b6d13",
       "name": "test",
-      "description": "",
+      "description": "test",
       "centerLat": 42.845,
       "centerLng": -0.015,
       "radiusMeters": 500,
       "assignedCollarIds": [],
-      "color": "#10B981",
+      "color": "#F59E0B",
       "active": true,
       "alertOnExit": true,
-      "fillVisible": true
+      "fillVisible": false
     }
   ]
 }
