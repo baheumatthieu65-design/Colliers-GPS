@@ -180,7 +180,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                     <Battery className={`w-4 h-4 ${collar.batteryLevel < 30 ? 'text-red-500' : 'text-[#5A6F4E]'}`} />
                     <div>
                       <span className="text-[#7D8A74] block text-[10px]">Batterie</span>
-                      <span className="font-semibold text-[#2C3327]">{collar.batteryLevel}%</span>
+                      <span className="font-semibold text-[#2C3327]">{collar.batteryLevel == null ? '—' : `${collar.batteryLevel}%`}</span>
                     </div>
                   </div>
 

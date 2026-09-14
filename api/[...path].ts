@@ -404,7 +404,7 @@ function mapCollar(
   config: GithubCollarConfig,
   row: any,
   assignedZoneId?: string | null,
-  latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null },
+  latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
 ) {
   return {
     id: config.id,
@@ -412,7 +412,9 @@ function mapCollar(
     collarNumber: config.collarNumber,
     animalNumber: config.animalNumber || undefined,
     color: config.color || '#5A6F4E',
-    batteryLevel: row?.battery_percent ?? 100,
+    // La batterie affichée doit correspondre à la même dernière trame GPS que
+    // la position affichée, et non à une valeur potentiellement ancienne dans collars.
+    batteryLevel: latestPosition ? (latestPosition.batteryPercent ?? null) : (row?.battery_percent ?? null),
     signalQuality: signalQuality(row?.signal_strength),
     lastUpdate: latestPosition?.recordedAt || row?.last_seen || row?.updated_at || row?.created_at || new Date().toISOString(),
     // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
@@ -473,22 +475,29 @@ async function getLatestPositionMap(supabase: any, ids: string[]) {
   const result = new Map<string, any>();
   if (!ids.length) return result;
 
-  const { data, error: dbError } = await supabase
-    .from('positions')
-    .select('collar_id, latitude, longitude, recorded_at')
-    .in('collar_id', ids)
-    .not('latitude', 'is', null)
-    .not('longitude', 'is', null)
-    .order('recorded_at', { ascending: false })
-    .limit(10000);
+  // Une requête limitée à 1 ligne par collier garantit de prendre la dernière
+  // donnée GPS de chaque collier, même si positions contient beaucoup d'historique.
+  const latestRows = await Promise.all(ids.map(async (collarId) => {
+    const { data, error: dbError } = await supabase
+      .from('positions')
+      .select('collar_id, latitude, longitude, recorded_at, battery_percent')
+      .eq('collar_id', collarId)
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (dbError) {
-    throw new Error(`Erreur lecture des dernières positions GPS : ${dbError.message}`);
-  }
+    if (dbError) {
+      throw new Error(`Erreur lecture de la dernière position GPS du collier ${collarId} : ${dbError.message}`);
+    }
 
-  for (const position of data || []) {
+    return data;
+  }));
+
+  for (const position of latestRows) {
     const collarId = String(position?.collar_id || '');
-    if (!collarId || result.has(collarId)) continue;
+    if (!collarId) continue;
 
     const latitude = Number(position?.latitude);
     const longitude = Number(position?.longitude);
@@ -498,6 +507,7 @@ async function getLatestPositionMap(supabase: any, ids: string[]) {
       latitude,
       longitude,
       recordedAt: position?.recorded_at || null,
+      batteryPercent: position?.battery_percent == null ? null : Number(position.battery_percent),
     });
   }
 

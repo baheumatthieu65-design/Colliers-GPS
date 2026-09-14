@@ -17,7 +17,7 @@ export interface GPSCollar {
   collarNumber: string;
   animalNumber?: string;
   color: string;
-  batteryLevel: number;
+  batteryLevel: number | null;
   signalQuality: 'Excellent' | 'Bon' | 'Moyen' | 'Faible' | 'Inconnu';
   lastUpdate: string;
   currentLat: number;
