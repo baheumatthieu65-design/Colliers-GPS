@@ -181,6 +181,39 @@
       "active": true,
       "alertOnExit": true,
       "fillVisible": false
+    },
+    {
+      "id": "67a97688-34e6-4734-8eea-5a134ff6c78c",
+      "name": "Tarbes",
+      "description": "Zone patatoïde tracée manuellement avec 4 sommets",
+      "centerLat": 43.238647854667235,
+      "centerLng": 0.06891124825958551,
+      "radiusMeters": 500,
+      "polygonCoords": [
+        [
+          43.240427247965904,
+          0.0647176197116739
+        ],
+        [
+          43.239723325202945,
+          0.07286891816796982
+        ],
+        [
+          43.23711091852303,
+          0.07102415062260727
+        ],
+        [
+          43.23732992697707,
+          0.06703430453609105
+        ]
+      ],
+      "assignedCollarIds": [
+        "ff843b96-8b9d-46e8-95bb-253e40f94d97"
+      ],
+      "color": "#8B5CF6",
+      "active": true,
+      "alertOnExit": true,
+      "fillVisible": false
     }
   ]
 }
