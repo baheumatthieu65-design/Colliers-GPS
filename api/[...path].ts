@@ -400,6 +400,25 @@ async function readZonesConfig() {
   return githubReadJson<ZonesConfigFile>(ZONES_CONFIG_PATH, fallbackZonesConfig);
 }
 
+async function refreshExpiredPushCadence(supabase: any, rows: any[]) {
+  const now = Date.now();
+  return Promise.all((rows || []).map(async (row: any) => {
+    const expiresAt = row?.push_expires_at ? Date.parse(String(row.push_expires_at)) : NaN;
+    const standard = Number(row?.standard_cadence_seconds);
+    if (Number.isFinite(expiresAt) && expiresAt <= now && Number.isFinite(standard) && standard > 0) {
+      const { data, error: dbError } = await supabase
+        .from('collars')
+        .update({ active_cadence_seconds: Math.max(60, Math.round(standard)), push_expires_at: null })
+        .eq('id', row.id)
+        .select('*')
+        .single();
+      if (dbError) throw new Error(`Impossible de terminer le PUSH expiré du collier ${row.id} : ${dbError.message}`);
+      return data || { ...row, active_cadence_seconds: Math.max(60, Math.round(standard)), push_expires_at: null };
+    }
+    return row;
+  }));
+}
+
 function mapCollar(
   config: GithubCollarConfig,
   row: any,
@@ -422,26 +441,34 @@ function mapCollar(
     currentLng: latestPosition?.longitude,
     status: config.status === 'inactive' ? 'offline' : 'inside_zone',
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
-    pushMode: row?.push_mode
-      ? {
-          ...row.push_mode,
-          intervalSeconds: row.push_mode.active
-            ? Number(row.push_mode.intervalSeconds || 1800)
-            : (Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) * 60 : 1800),
-        }
-      : {
-          active: false,
-          intervalSeconds: Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) * 60 : 1800,
-          expiresAt: null,
-          durationMinutes: 0,
-        },
+    pushMode: (() => {
+      const standardCadenceSeconds = Number(row?.standard_cadence_seconds) > 0
+        ? Math.max(60, Math.round(Number(row.standard_cadence_seconds)))
+        : (Number(config.baseTransmissionMinutes) > 0 ? Math.max(60, Math.round(Number(config.baseTransmissionMinutes) * 60)) : 1800);
+      const activeCadenceSeconds = Number(row?.active_cadence_seconds) > 0
+        ? Math.max(60, Math.round(Number(row.active_cadence_seconds)))
+        : standardCadenceSeconds;
+      const expiresAt = row?.push_expires_at || null;
+      const pushActive = Boolean(expiresAt && Date.parse(String(expiresAt)) > Date.now());
+      return {
+        active: pushActive,
+        intervalSeconds: pushActive ? activeCadenceSeconds : standardCadenceSeconds,
+        expiresAt: pushActive ? expiresAt : null,
+        durationMinutes: pushActive && row?.push_duration_minutes ? Number(row.push_duration_minutes) : 0,
+      };
+    })(),
     // Ces données viennent de Supabase, pas de la configuration GitHub.
     imei: row?.imei || undefined,
     iccid: row?.iccid || undefined,
     simPhone: row?.sim_phone || undefined,
     mode: config.mode || row?.mode || 'simulation',
     notes: config.notes || undefined,
-    baseTransmissionMinutes: Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) : 30,
+    standardCadenceSeconds: Number(row?.standard_cadence_seconds) > 0 ? Math.max(60, Math.round(Number(row.standard_cadence_seconds))) : undefined,
+    activeCadenceSeconds: Number(row?.active_cadence_seconds) > 0 ? Math.max(60, Math.round(Number(row.active_cadence_seconds))) : undefined,
+    pushExpiresAt: row?.push_expires_at || null,
+    baseTransmissionMinutes: Number(row?.standard_cadence_seconds) > 0
+      ? Math.max(1, Math.round(Number(row.standard_cadence_seconds) / 60))
+      : (Number(config.baseTransmissionMinutes) > 0 ? Number(config.baseTransmissionMinutes) : 30),
   };
 }
 
@@ -556,6 +583,13 @@ async function mirrorCollarToSupabase(supabase: any, config: GithubCollarConfig,
     status: config.status || 'active',
     color: config.color || '#5A6F4E',
     notes: config.notes || null,
+    standard_cadence_seconds: Number(config.baseTransmissionMinutes) > 0
+      ? Math.max(60, Math.round(Number(config.baseTransmissionMinutes) * 60))
+      : 1800,
+    active_cadence_seconds: Number(config.baseTransmissionMinutes) > 0
+      ? Math.max(60, Math.round(Number(config.baseTransmissionMinutes) * 60))
+      : 1800,
+    push_expires_at: null,
   };
 
   const { data, error: dbError } = await supabase
@@ -569,21 +603,21 @@ async function mirrorCollarToSupabase(supabase: any, config: GithubCollarConfig,
 }
 
 
-async function queueStandardCadenceCommand(supabase: any, collar: any, baseTransmissionMinutes: number) {
-  const minutes = Number(baseTransmissionMinutes);
-  if (!Number.isFinite(minutes) || minutes <= 0) return null;
-  const cadenceSeconds = Math.max(60, Math.round(minutes * 60));
+async function queueStandardCadenceCommand(supabase: any, collar: any, cadenceSecondsInput: number) {
+  const cadenceSeconds = Number(cadenceSecondsInput);
+  if (!Number.isFinite(cadenceSeconds) || cadenceSeconds < 60) return null;
+  const normalizedCadenceSeconds = Math.max(60, Math.round(cadenceSeconds));
   const payload = {
     type: 'set_standard_cadence',
-    cadenceMinutes: minutes,
-    cadenceSeconds,
+    cadenceMinutes: normalizedCadenceSeconds / 60,
+    cadenceSeconds: normalizedCadenceSeconds,
     delivery: 'next_wakeup',
     instruction: 'Au prochain réveil, appliquer cette cadence standard jusqu’à nouvelle modification ou PUSH temporaire.',
   };
 
   const { data: command, error: commandError } = await supabase.from('commands').insert({
     command_type: 'configure',
-    cadence_seconds: cadenceSeconds,
+    cadence_seconds: normalizedCadenceSeconds,
     duration_minutes: null,
     target_mode: 'selected',
     status: 'pending',
@@ -644,10 +678,12 @@ export default async function handler(req: AnyReq, res: AnyRes) {
     if (path === 'collars' && method === 'GET') {
       const config = await readCollarsConfig();
       const ids = config.data.collars.map((c) => c.id);
-      const [rows, latestPositions] = await Promise.all([
+      let [rows, latestPositions] = await Promise.all([
         getSupabaseCollarMap(supabase, ids),
         getLatestPositionMap(supabase, ids),
       ]);
+      const refreshedRows = await refreshExpiredPushCadence(supabase, Array.from(rows.values()));
+      rows = new Map(refreshedRows.map((row: any) => [row.id, row]));
 
       const zoneByCollar = new Map<string, string>();
       const zones = await readZonesConfig();
@@ -697,7 +733,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
       try {
         const row = await mirrorCollarToSupabase(supabase, collarConfig, body);
-        await queueStandardCadenceCommand(supabase, { id: collarConfig.id, imei: row?.imei || body.imei || null }, collarConfig.baseTransmissionMinutes || 30);
+        await queueStandardCadenceCommand(supabase, { id: collarConfig.id, imei: row?.imei || body.imei || null }, Number(row?.standard_cadence_seconds) || 1800);
         if (body.activeZoneId) {
           const zones = await readZonesConfig();
           const zone = zones.data.zones.find((z) => z.id === body.activeZoneId);
@@ -761,9 +797,26 @@ export default async function handler(req: AnyReq, res: AnyRes) {
           simPhone: body.simPhone !== undefined ? body.simPhone : existingRow?.sim_phone,
         };
         const row = await mirrorCollarToSupabase(supabase, updated, technicalBody);
-        if (Number(updated.baseTransmissionMinutes) !== Number(current.baseTransmissionMinutes)) {
-          await queueStandardCadenceCommand(supabase, { id: updated.id, imei: row?.imei || technicalBody.imei || null }, updated.baseTransmissionMinutes || 30);
+        const standardCadenceSeconds = Math.max(60, Math.round((Number(updated.baseTransmissionMinutes) > 0 ? Number(updated.baseTransmissionMinutes) : 30) * 60));
+        const pushStillActive = Boolean(row?.push_expires_at && Date.parse(String(row.push_expires_at)) > Date.now());
+        const cadenceUpdate: Record<string, any> = { standard_cadence_seconds: standardCadenceSeconds };
+        if (!pushStillActive) {
+          cadenceUpdate.active_cadence_seconds = standardCadenceSeconds;
+          cadenceUpdate.push_expires_at = null;
         }
+        const { data: cadenceRow, error: cadenceError } = await supabase
+          .from('collars')
+          .update(cadenceUpdate)
+          .eq('id', id)
+          .select('*')
+          .single();
+        if (cadenceError) throw new Error(`Mise à jour de la cadence Supabase impossible : ${cadenceError.message}`);
+        if (Number(updated.baseTransmissionMinutes) !== Number(current.baseTransmissionMinutes)) {
+          await queueStandardCadenceCommand(supabase, { id: updated.id, imei: cadenceRow?.imei || row?.imei || technicalBody.imei || null }, standardCadenceSeconds);
+        }
+        row.standard_cadence_seconds = cadenceRow?.standard_cadence_seconds ?? standardCadenceSeconds;
+        row.active_cadence_seconds = cadenceRow?.active_cadence_seconds ?? row.active_cadence_seconds;
+        row.push_expires_at = cadenceRow?.push_expires_at ?? row.push_expires_at;
         if (body.activeZoneId !== undefined) {
           const zones = await readZonesConfig();
           for (const zone of zones.data.zones) {
@@ -1057,6 +1110,12 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const { error: targetError } = await supabase.from('command_targets').insert(targetRows);
       if (targetError) return error(res, 400, 'Commande PUSH créée mais cibles impossibles à enregistrer.', targetError);
 
+      const { error: cadenceError } = await supabase
+        .from('collars')
+        .update({ active_cadence_seconds: intervalSeconds, push_expires_at: expiresAt })
+        .in('id', targets);
+      if (cadenceError) return error(res, 400, 'Commande PUSH créée mais état de cadence impossible à mettre à jour.', cadenceError);
+
       return res.status(200).json({
         ok: true,
         success: true,
@@ -1091,6 +1150,19 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         mqtt_payload: { type: 'stop_push', delivery: 'next_wakeup', collarId, imei: targetCollar?.imei || null },
       });
       if (targetError) return error(res, 400, 'Ordre d’arrêt créé mais cible impossible à enregistrer.', targetError);
+      const { data: collarRow, error: collarLookupError } = await supabase
+        .from('collars')
+        .select('standard_cadence_seconds')
+        .eq('id', collarId)
+        .maybeSingle();
+      if (collarLookupError) return error(res, 400, 'Ordre d’arrêt créé mais lecture de la cadence standard impossible.', collarLookupError);
+      const standardCadenceSeconds = Number(collarRow?.standard_cadence_seconds);
+      if (!Number.isFinite(standardCadenceSeconds) || standardCadenceSeconds < 60) return error(res, 400, 'Cadence standard du collier invalide.', { collarId });
+      const { error: cadenceError } = await supabase
+        .from('collars')
+        .update({ active_cadence_seconds: Math.round(standardCadenceSeconds), push_expires_at: null })
+        .eq('id', collarId);
+      if (cadenceError) return error(res, 400, 'Ordre d’arrêt créé mais cadence impossible à restaurer.', cadenceError);
       return res.status(200).json({ ok: true, success: true, message: 'Arrêt PUSH mis en file pour le prochain réveil.', commandId: command.id });
     }
 

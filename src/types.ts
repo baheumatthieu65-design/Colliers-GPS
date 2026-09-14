@@ -31,6 +31,9 @@ export interface GPSCollar {
   mode?: 'simulation' | 'real';
   notes?: string;
   baseTransmissionMinutes?: number;
+  standardCadenceSeconds?: number;
+  activeCadenceSeconds?: number;
+  pushExpiresAt?: string | null;
   dangerActive?: boolean;
 }
 
