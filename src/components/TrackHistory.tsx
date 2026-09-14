@@ -19,6 +19,7 @@ interface TrackHistoryProps {
   historyLogs: GPSPositionLog[];
   onClearTrack: () => void;
   onSelectMapTab: () => void;
+  onCreatePatatoide: () => void;
 }
 
 export const TrackHistory: React.FC<TrackHistoryProps> = ({
@@ -27,6 +28,7 @@ export const TrackHistory: React.FC<TrackHistoryProps> = ({
   historyLogs,
   onClearTrack,
   onSelectMapTab,
+  onCreatePatatoide,
 }) => {
   const [selectedCollarId, setSelectedCollarId] = useState<string>(collars[0]?.id || 'all');
   const [periodPreset, setPeriodPreset] = useState<'today' | 'yesterday' | '3days' | '7days' | 'custom'>('today');
@@ -212,13 +214,24 @@ export const TrackHistory: React.FC<TrackHistoryProps> = ({
               </button>
             </div>
 
-            <button
-              type="submit"
-              className="bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs px-5 py-2 rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-2"
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>Charger le Parcours</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onCreatePatatoide}
+                className="bg-[#F2F4F1] hover:bg-[#E2E6DF] text-[#3E4A35] border border-[#C5D1C1] font-bold text-xs px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-2"
+              >
+                <Compass className="w-3.5 h-3.5 text-[#5A6F4E]" />
+                <span>Créer avec patatoïde</span>
+              </button>
+
+              <button
+                type="submit"
+                className="bg-[#5A6F4E] hover:bg-[#4A5E3E] text-white font-bold text-xs px-5 py-2 rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-2"
+              >
+                <Filter className="w-3.5 h-3.5" />
+                <span>Charger le Parcours</span>
+              </button>
+            </div>
           </div>
 
         </form>

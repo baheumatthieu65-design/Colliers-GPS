@@ -277,7 +277,18 @@ async function githubWriteJson(path: string, value: unknown, message: string) {
     throw new Error(`GitHub écriture ${path} impossible (${response.status}) : ${text.slice(0, 500)}`);
   }
 
-  return response.json();
+  const payload = await response.json();
+  // Une écriture réussie doit invalider/remplacer immédiatement le cache de
+  // lecture. Sinon un GET suivant peut servir l'ancienne configuration pendant
+  // jusqu'à 60 s et donner l'impression qu'un collier/une zone n'a pas été
+  // enregistré(e) ou supprimé(e).
+  githubJsonCache.set(path, {
+    data: value,
+    sha: payload?.content?.sha || null,
+    expiresAt: Date.now() + GITHUB_READ_CACHE_MS,
+  });
+
+  return payload;
 }
 
 async function githubDeleteFile(path: string, message: string) {
@@ -821,7 +832,11 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         centerLng,
         radiusMeters: Number(body.radiusMeters) || 500,
         polygonCoords: Array.isArray(body.polygonCoords) ? body.polygonCoords : undefined,
-        assignedCollarIds: Array.isArray(body.assignedCollarIds) ? body.assignedCollarIds.filter((x: any) => x !== 'all') : [],
+        assignedCollarIds: Array.isArray(body.assignedCollarIds)
+          ? (body.assignedCollarIds.includes('all')
+              ? (await readCollarsConfig()).data.collars.map((c) => c.id)
+              : body.assignedCollarIds.filter((x: any) => x !== 'all'))
+          : [],
         color: body.color || '#5A6F4E',
         active: body.active !== false,
         alertOnExit: body.alertOnExit !== false,

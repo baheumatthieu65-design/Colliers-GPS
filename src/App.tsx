@@ -312,40 +312,6 @@ export default function App() {
     }
   };
 
-  // Sécurité des actions collier : capture native au niveau document.
-  // Cela évite qu'un conteneur/une couche responsive intercepte le clic avant React.
-  useEffect(() => {
-    const onDocumentClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const button = target?.closest('button[data-collar-action]') as HTMLButtonElement | null;
-      if (!button) return;
-
-      const collarId = button.dataset.collarId;
-      const action = button.dataset.collarAction;
-      if (!collarId || !action) return;
-
-      const collar = collars.find((item) => item.id === collarId);
-      if (!collar) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (action === 'edit') {
-        console.log('[PaturGPS] NATIVE EDIT', shortId(collar.id));
-        setEditingCollar(collar);
-        setIsCollarModalOpen(true);
-      }
-
-      if (action === 'delete') {
-        console.log('[PaturGPS] NATIVE DELETE', shortId(collar.id));
-        void handleDeleteCollar(collar.id);
-      }
-    };
-
-    document.addEventListener('click', onDocumentClick, true);
-    return () => document.removeEventListener('click', onDocumentClick, true);
-  }, [collars, handleDeleteCollar]);
-
   const activeAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
 
   // Badge de l'icône de la PWA : nombre d'alertes non acquittées.
@@ -514,6 +480,12 @@ export default function App() {
               historyLogs={historyLogs}
               onClearTrack={() => setHistoryLogs([])}
               onSelectMapTab={() => setActiveTab('map')}
+              onCreatePatatoide={() => {
+                setEditingZone(null);
+                setPatatoideEditZoneId(null);
+                setActiveTab('map');
+                setPatatoideRequest(prev => prev + 1);
+              }}
             />
           )}
 
