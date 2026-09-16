@@ -1,14 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import {
-  githubReadJson,
-  githubJsonCache,
-  GITHUB_READ_CACHE_MS,
-  readZonesConfig,
-  pointInsideZone,
-  evaluateZoneExit,
-  evaluateBatteryLow,
-} from './_lib/positionChecks';
-import type { GithubZoneConfig, ZonesConfigFile } from './_lib/positionChecks';
 
 /**
  * Pâtur'GPS V12
@@ -180,8 +170,66 @@ function decodeGithubContent(encoded: string) {
   return Buffer.from(encoded.replace(/\n/g, ''), 'base64').toString('utf8');
 }
 
-// NOTE : githubReadJson + son cache mémoire (githubJsonCache) vivent
-// maintenant dans ./_lib/positionChecks.ts, partagés avec api/positions-check.ts.
+type GithubJsonCacheEntry = {
+  data: unknown;
+  sha: string | null;
+  expiresAt: number;
+};
+
+// Les routes de lecture sont interrogées très fréquemment par la PWA.
+// Garder la configuration GitHub en mémoire pendant une courte durée évite
+// de consommer inutilement la limite API GitHub à chaque polling.
+// En cas de rate-limit GitHub, on conserve aussi la dernière configuration
+// valide afin que l'application continue de fonctionner normalement.
+const githubJsonCache = new Map<string, GithubJsonCacheEntry>();
+const GITHUB_READ_CACHE_MS = 60_000;
+
+async function githubReadJson<T>(path: string, fallback: T): Promise<{ data: T; sha: string | null; fromGithub: boolean }> {
+  if (!githubToken) return { data: fallback, sha: null, fromGithub: false };
+
+  const cached = githubJsonCache.get(path);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { data: cached.data as T, sha: cached.sha, fromGithub: true };
+  }
+
+  try {
+    const response = await fetch(githubContentsUrl(path), {
+      headers: githubHeaders(),
+      cache: 'no-store',
+    });
+
+    if (response.status === 404) return { data: fallback, sha: null, fromGithub: true };
+
+    if (!response.ok) {
+      const text = await response.text();
+      if (cached) {
+        console.warn(`[PaturGPS API] GitHub ${path} indisponible (${response.status}), utilisation de la dernière configuration valide.`);
+        return { data: cached.data as T, sha: cached.sha, fromGithub: true };
+      }
+      console.warn(`[PaturGPS API] GitHub ${path} indisponible (${response.status}), utilisation de la configuration locale de secours.`);
+      return { data: fallback, sha: null, fromGithub: false };
+    }
+
+    const payload = await response.json();
+    const raw = decodeGithubContent(String(payload.content || ''));
+    const data = JSON.parse(raw) as T;
+
+    githubJsonCache.set(path, {
+      data,
+      sha: payload.sha || null,
+      expiresAt: Date.now() + GITHUB_READ_CACHE_MS,
+    });
+
+    return { data, sha: payload.sha || null, fromGithub: true };
+  } catch (err) {
+    if (cached) {
+      console.warn(`[PaturGPS API] Lecture GitHub ${path} échouée, utilisation de la dernière configuration valide.`);
+      return { data: cached.data as T, sha: cached.sha, fromGithub: true };
+    }
+    console.warn(`[PaturGPS API] Lecture GitHub ${path} échouée, utilisation de la configuration locale de secours.`);
+    return { data: fallback, sha: null, fromGithub: false };
+  }
+}
 
 async function githubReadFile(path: string): Promise<GithubFile | null> {
   requireGithubWriteAccess();
@@ -278,9 +326,23 @@ type GithubCollarConfig = {
   baseTransmissionMinutes?: number;
 };
 
-// GithubZoneConfig / ZonesConfigFile sont importés depuis ./_lib/positionChecks.
+type GithubZoneConfig = {
+  id: string;
+  name: string;
+  description?: string;
+  centerLat: number;
+  centerLng: number;
+  radiusMeters: number;
+  polygonCoords?: Array<[number, number]>;
+  assignedCollarIds: string[];
+  color: string;
+  active: boolean;
+  alertOnExit: boolean;
+  fillVisible?: boolean;
+};
 
 type CollarsConfigFile = { version: number; collars: GithubCollarConfig[] };
+type ZonesConfigFile = { version: number; zones: GithubZoneConfig[] };
 
 const fallbackCollarsConfig: CollarsConfigFile = {
   version: 1,
@@ -297,14 +359,46 @@ const fallbackCollarsConfig: CollarsConfigFile = {
   }],
 };
 
+const fallbackZonesConfig: ZonesConfigFile = {
+  version: 1,
+  zones: [{
+    id: '6db4ea95-c17a-47f5-92d6-5c66e2892c0f',
+    name: 'Montaut',
+    description: 'Zone patatoïde tracée manuellement avec 11 sommets',
+    centerLat: 42.970209500724984,
+    centerLng: 0.4217509643785659,
+    radiusMeters: 500,
+    polygonCoords: [
+      [42.977274252378116, 0.40263175964355474],
+      [42.980043184528625, 0.41312319189415364],
+      [42.977180059557256, 0.4258978532817893],
+      [42.97419718096634, 0.4343032836914063],
+      [42.96672365223365, 0.44108390808105474],
+      [42.96163610904843, 0.4411697387695313],
+      [42.95849544028007, 0.43627738952636724],
+      [42.96521627589293, 0.4228878021240235],
+      [42.966346811611274, 0.4134464263916016],
+      [42.97118275764097, 0.40640830993652344],
+      [42.974008783837114, 0.40203094482421875],
+    ],
+    assignedCollarIds: ['ff843b96-8b9d-46e8-95bb-253e40f94d97'],
+    color: '#10B981',
+    active: true,
+    alertOnExit: true,
+    fillVisible: false,
+  }],
+};
+
 const emptyCollarsConfig: CollarsConfigFile = fallbackCollarsConfig;
+const emptyZonesConfig: ZonesConfigFile = fallbackZonesConfig;
 
 async function readCollarsConfig() {
   return githubReadJson<CollarsConfigFile>(COLLARS_CONFIG_PATH, fallbackCollarsConfig);
 }
 
-// readZonesConfig est importé depuis ./_lib/positionChecks (mêmes données de
-// secours, partagées avec api/positions-check.ts).
+async function readZonesConfig() {
+  return githubReadJson<ZonesConfigFile>(ZONES_CONFIG_PATH, fallbackZonesConfig);
+}
 
 async function refreshExpiredPushCadence(supabase: any, rows: any[]) {
   const now = Date.now();
@@ -325,28 +419,11 @@ async function refreshExpiredPushCadence(supabase: any, rows: any[]) {
   }));
 }
 
-// Calcule le statut réel (dans/hors zone) à partir de la dernière position GPS
-// connue et de la ou des patatoïdes affectées au collier. Avant ce correctif,
-// le statut était figé à 'inside_zone' : le point rouge "hors zone" sur la
-// carte et le bandeau d'alerte sur la fiche collier ne s'allumaient donc
-// jamais, même quand la brebis était réellement dehors.
-function computeCollarStatus(
-  config: GithubCollarConfig,
-  latestPosition: { latitude: number; longitude: number } | undefined,
-  assignedZones: any[],
-) {
-  if (config.status === 'inactive') return 'offline';
-  if (!latestPosition || !assignedZones.length) return 'inside_zone';
-  const inside = assignedZones.some((zone) => pointInsideZone(latestPosition.latitude, latestPosition.longitude, zone));
-  return inside ? 'inside_zone' : 'out_of_zone';
-}
-
 function mapCollar(
   config: GithubCollarConfig,
   row: any,
   assignedZoneId?: string | null,
   latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
-  assignedZones: any[] = [],
 ) {
   return {
     id: config.id,
@@ -362,7 +439,7 @@ function mapCollar(
     // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
     currentLat: latestPosition?.latitude,
     currentLng: latestPosition?.longitude,
-    status: computeCollarStatus(config, latestPosition, assignedZones),
+    status: config.status === 'inactive' ? 'offline' : 'inside_zone',
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
     pushMode: (() => {
       const standardCadenceSeconds = Number(row?.standard_cadence_seconds) > 0
@@ -562,78 +639,134 @@ async function queueStandardCadenceCommand(supabase: any, collar: any, cadenceSe
 }
 
 
-// pointInPolygon / distanceMeters / pointInsideZone / getAssignedZonesForCollar
-// / evaluateZoneExit / evaluateBatteryLow sont importés depuis
-// ./_lib/positionChecks.ts, partagés avec api/positions-check.ts (déclenché
-// par le Database Webhook Supabase sur `positions`, y compris pour les
-// positions écrites directement par l'automatisation Zapier/Make/n8n).
+function pointInPolygon(latitude: number, longitude: number, polygon: Array<[number, number]>) {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = Number(polygon[i][0]);
+    const xi = Number(polygon[i][1]);
+    const yj = Number(polygon[j][0]);
+    const xj = Number(polygon[j][1]);
+    const intersects = ((yi > latitude) !== (yj > latitude))
+      && (longitude < ((xj - xi) * (latitude - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
 
-type IngestPositionInput = {
-  latitude: number;
-  longitude: number;
-  altitude?: number | null;
-  accuracy?: number | null;
-  speed?: number | null;
-  heading?: number | null;
-  batteryPercent?: number | null;
-  signalStrength?: number | null;
-  recordedAt?: string | null;
-  source: 'manual' | 'simulation' | 'gps' | 'mqtt';
-};
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000;
+  const toRad = (value: number) => value * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, a)));
+}
 
-// Point d'entrée UNIQUE pour toute nouvelle position, qu'elle vienne du BG95
-// (MQTT, /api/telemetry) ou d'une saisie manuelle dans l'app (/api/collars/:id/position).
-// Avant ce correctif, les positions ajoutées directement dans Supabase (hors
-// API) ne déclenchaient JAMAIS evaluateZoneExit : aucune alerte hors-zone
-// n'était donc jamais créée pour ces positions-là.
-async function ingestPosition(supabase: any, collar: any, input: IngestPositionInput) {
-  const recordedAt = input.recordedAt || new Date().toISOString();
-  const { data: position, error: positionError } = await supabase.from('positions').insert({
+function pointInsideZone(latitude: number, longitude: number, zone: any) {
+  if (!zone || zone.enabled === false) return false;
+  if (zone.type === 'polygon') {
+    const raw = Array.isArray(zone.polygon_coords) ? zone.polygon_coords : [];
+    const polygon = raw
+      .map((p: any) => Array.isArray(p) ? [Number(p[0]), Number(p[1])] as [number, number] : null)
+      .filter((p: any): p is [number, number] => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    return pointInPolygon(latitude, longitude, polygon);
+  }
+
+  const centerLat = Number(zone.center_latitude);
+  const centerLng = Number(zone.center_longitude);
+  const radius = Number(zone.radius_meters);
+  if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng) || !Number.isFinite(radius) || radius <= 0) return false;
+  return distanceMeters(latitude, longitude, centerLat, centerLng) <= radius;
+}
+
+async function getAssignedZonesForCollar(supabase: any, collarId: string) {
+  // GitHub est la source de vérité de l'affectation des clôtures.
+  // Ne pas dépendre de collar_zones ici : si le miroir Supabase est en retard,
+  // une position GPS réelle doit quand même déclencher l'alerte.
+  const config = await readZonesConfig();
+  return config.data.zones
+    .filter((zone) => zone.active !== false)
+    .filter((zone) => zone.alertOnExit !== false)
+    .filter((zone) => (zone.assignedCollarIds || []).includes(collarId))
+    .map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      type: zone.polygonCoords?.length >= 3 ? 'polygon' : 'circle',
+      center_latitude: zone.centerLat,
+      center_longitude: zone.centerLng,
+      radius_meters: zone.radiusMeters,
+      polygon_coords: zone.polygonCoords || null,
+      enabled: zone.active !== false,
+    }));
+}
+
+async function evaluateZoneExit(supabase: any, collar: any, latitude: number, longitude: number, recordedAt: string) {
+  const zones = await getAssignedZonesForCollar(supabase, collar.id);
+  if (!zones.length) return { checked: false, inside: true, alerted: false, reason: 'no_assigned_zone' };
+
+  // Une brebis peut être dans plusieurs zones : elle est considérée dedans si
+  // elle est dans au moins une des zones qui lui sont affectées.
+  const outsideZones = zones.filter((zone: any) => !pointInsideZone(latitude, longitude, zone));
+  const inside = outsideZones.length < zones.length;
+  if (inside) return { checked: true, inside: true, alerted: false, reason: 'inside_zone' };
+
+  // On cherche la dernière position antérieure qui était encore dans une zone.
+  // Si aucune position intérieure n'existe, cela couvre aussi le cas important
+  // où une zone vient d'être affectée alors que la brebis est déjà dehors.
+  const { data: recentPositions, error: recentError } = await supabase
+    .from('positions')
+    .select('latitude,longitude,recorded_at,created_at')
+    .eq('collar_id', collar.id)
+    .order('recorded_at', { ascending: false })
+    .limit(100);
+  if (recentError) throw new Error(`Lecture des positions précédentes impossible : ${recentError.message}`);
+
+  const previousPositions = (recentPositions || []).filter((position: any) =>
+    String(position.recorded_at || '') !== String(recordedAt)
+  );
+  const lastInside = previousPositions.find((position: any) => {
+    const lat = Number(position.latitude);
+    const lng = Number(position.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng)
+      && zones.some((zone: any) => pointInsideZone(lat, lng, zone));
+  });
+
+  // Une seule alerte par épisode hors-zone. Si la brebis est déjà dehors et
+  // qu'une alerte existe pour cet épisode, on ne spamme pas à chaque trame.
+  const zone = zones[0];
+  const { data: lastAlert, error: alertLookupError } = await supabase
+    .from('alerts')
+    .select('id,created_at,zone_id')
+    .eq('collar_id', collar.id)
+    .eq('zone_id', zone.id)
+    .eq('type', 'zone_exit')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (alertLookupError) throw new Error(`Lecture de la dernière alerte hors zone impossible : ${alertLookupError.message}`);
+
+  const lastInsideAt = lastInside?.recorded_at ? Date.parse(String(lastInside.recorded_at)) : NaN;
+  const lastAlertAt = lastAlert?.created_at ? Date.parse(String(lastAlert.created_at)) : NaN;
+  if (lastAlert && (!Number.isFinite(lastInsideAt) || (Number.isFinite(lastAlertAt) && lastAlertAt >= lastInsideAt))) {
+    return { checked: true, inside: false, alerted: false, reason: 'already_alerted_this_outside_episode' };
+  }
+
+  const message = `ALERTE HORS ZONE : ${collar.animal_name || collar.name || collar.internal_code || 'Collier'} est hors de la zone de sécurité ${zone.name}.`;
+  const { data: alert, error: alertError } = await supabase.from('alerts').insert({
     collar_id: collar.id,
-    latitude: input.latitude,
-    longitude: input.longitude,
-    altitude: input.altitude ?? null,
-    accuracy: input.accuracy ?? null,
-    speed: input.speed ?? null,
-    heading: input.heading ?? null,
-    battery_percent: input.batteryPercent ?? null,
-    signal_strength: input.signalStrength ?? null,
-    source: input.source,
-    recorded_at: recordedAt,
+    zone_id: zone.id,
+    type: 'zone_exit',
+    severity: 'warning',
+    message,
+    latitude,
+    longitude,
+    battery_percent: collar.battery_percent ?? null,
   }).select('*').single();
-  if (positionError) throw new Error(`Impossible de stocker la position : ${positionError.message}`);
+  if (alertError) throw new Error(`Impossible de créer l'alerte hors zone : ${alertError.message}`);
 
-  const { error: collarUpdateError } = await supabase.from('collars').update({
-    last_latitude: input.latitude,
-    last_longitude: input.longitude,
-    last_altitude: input.altitude ?? null,
-    last_accuracy: input.accuracy ?? null,
-    battery_percent: input.batteryPercent ?? collar.battery_percent,
-    signal_strength: input.signalStrength ?? collar.signal_strength,
-    last_seen: recordedAt,
-  }).eq('id', collar.id);
-  if (collarUpdateError) throw new Error(`Position enregistrée mais mise à jour du collier impossible : ${collarUpdateError.message}`);
-
-  // Les deux contrôles tournent à chaque nouvelle position, peu importe la
-  // source. L'insertion dans `alerts` déclenche ensuite le Web Push Supabase
-  // (webhook côté dashboard Supabase, à configurer séparément).
-  let zoneCheck: any = { checked: false, inside: true, alerted: false };
-  try {
-    zoneCheck = await evaluateZoneExit(supabase, collar, input.latitude, input.longitude, recordedAt);
-  } catch (zoneError: any) {
-    // La position reste valide même si le contrôle de zone échoue : on ne
-    // perd jamais la télémétrie à cause du système d'alerte.
-    console.error('[PaturGPS API] Contrôle hors zone échoué', zoneError?.message || zoneError);
-  }
-
-  let batteryCheck: any = { checked: false, low: false, alerted: false };
-  try {
-    batteryCheck = await evaluateBatteryLow(supabase, collar, input.latitude, input.longitude, input.batteryPercent, recordedAt);
-  } catch (batteryError: any) {
-    console.error('[PaturGPS API] Contrôle batterie faible échoué', batteryError?.message || batteryError);
-  }
-
-  return { position, zoneCheck, batteryCheck };
+  return { checked: true, inside: false, alerted: true, alertId: alert?.id || null, zoneId: zone.id, zoneName: zone.name };
 }
 
 export default async function handler(req: AnyReq, res: AnyRes) {
@@ -684,32 +817,16 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       rows = new Map(refreshedRows.map((row: any) => [row.id, row]));
 
       const zoneByCollar = new Map<string, string>();
-      // Toutes les zones affectées à chaque collier (un collier peut être dans
-      // plusieurs patatoïdes) : nécessaire pour calculer le vrai statut
-      // dans/hors zone ci-dessous, au lieu de le figer à 'inside_zone'.
-      const zonesByCollar = new Map<string, any[]>();
       const zones = await readZonesConfig();
       for (const zone of zones.data.zones) {
-        if (zone.active === false) continue;
-        const zoneForStatus = {
-          type: zone.polygonCoords && zone.polygonCoords.length >= 3 ? 'polygon' : 'circle',
-          polygon_coords: zone.polygonCoords || null,
-          center_latitude: zone.centerLat,
-          center_longitude: zone.centerLng,
-          radius_meters: zone.radiusMeters,
-          enabled: true,
-        };
         for (const collarId of zone.assignedCollarIds || []) {
           zoneByCollar.set(collarId, zone.id);
-          const list = zonesByCollar.get(collarId) || [];
-          list.push(zoneForStatus);
-          zonesByCollar.set(collarId, list);
         }
       }
 
       return res.status(200).json(
         config.data.collars.map((c) =>
-          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id), zonesByCollar.get(c.id) || [])
+          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
         )
       );
     }
@@ -1207,56 +1324,46 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const lng = Number(body.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return error(res, 400, 'Latitude/longitude invalides.');
 
-      const { position, zoneCheck, batteryCheck } = await ingestPosition(supabase, collar, {
+      const recordedAt = body.recordedAt || new Date().toISOString();
+      const { data: position, error: positionError } = await supabase.from('positions').insert({
+        collar_id: collar.id,
         latitude: lat,
         longitude: lng,
         altitude: body.altitude ?? null,
         accuracy: body.accuracy ?? null,
         speed: body.speed ?? null,
         heading: body.heading ?? null,
-        batteryPercent: body.batteryPercent ?? null,
-        signalStrength: body.signalStrength ?? null,
-        recordedAt: body.recordedAt || null,
+        battery_percent: body.batteryPercent ?? null,
+        signal_strength: body.signalStrength ?? null,
         source: 'mqtt',
-      });
+        recorded_at: recordedAt,
+      }).select('*').single();
+      if (positionError) return error(res, 400, 'Impossible de stocker la position MQTT.', positionError);
 
-      return res.status(201).json({ ok: true, collarId: collar.id, imei, positionId: position.id, zoneCheck, batteryCheck });
-    }
+      const { error: collarUpdateError } = await supabase.from('collars').update({
+        last_latitude: lat,
+        last_longitude: lng,
+        last_altitude: body.altitude ?? null,
+        last_accuracy: body.accuracy ?? null,
+        battery_percent: body.batteryPercent ?? collar.battery_percent,
+        signal_strength: body.signalStrength ?? collar.signal_strength,
+        last_seen: recordedAt,
+      }).eq('id', collar.id);
+      if (collarUpdateError) return error(res, 400, 'Position enregistrée mais mise à jour du collier impossible.', collarUpdateError);
 
-    // ---------------- SAISIE MANUELLE D'UNE POSITION (depuis l'app) ----------------
-    // Tant que le worker MQTT/BG95 n'est pas branché, c'est le moyen recommandé
-    // d'enregistrer une position reçue du collier (SMS, appel...) : contrairement
-    // à une insertion directe dans Supabase Studio, cette route déclenche bien
-    // le contrôle hors-zone et le contrôle batterie faible.
-    const manualPositionMatch = path.match(/^collars\/([^/]+)\/position$/);
-    if (manualPositionMatch && method === 'POST') {
-      const collarId = manualPositionMatch[1];
-      const body = req.body || {};
-
-      const lat = Number(body.latitude);
-      const lng = Number(body.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return error(res, 400, 'Latitude/longitude invalides.');
-
-      const { data: collar, error: collarError } = await supabase.from('collars').select('*').eq('id', collarId).maybeSingle();
-      if (collarError) return error(res, 400, 'Recherche du collier impossible.', collarError);
-      if (!collar) return error(res, 404, 'Collier introuvable.', { collarId });
-
-      const batteryPercent = body.batteryPercent !== undefined && body.batteryPercent !== null && body.batteryPercent !== ''
-        ? Number(body.batteryPercent)
-        : null;
-      if (batteryPercent != null && (!Number.isFinite(batteryPercent) || batteryPercent < 0 || batteryPercent > 100)) {
-        return error(res, 400, 'Batterie invalide (0 à 100).');
+      // Le contrôle géographique est déclenché à chaque nouvelle trame GPS.
+      // L'insertion dans alerts déclenche ensuite le Web Push Supabase déjà
+      // configuré, sans modifier le firmware BG95.
+      let zoneCheck = { checked: false, inside: true, alerted: false } as any;
+      try {
+        zoneCheck = await evaluateZoneExit(supabase, collar, lat, lng, recordedAt);
+      } catch (zoneError: any) {
+        // La position reste valide même si le contrôle de zone échoue : on ne
+        // perd jamais la télémétrie à cause du système d'alerte.
+        console.error('[PaturGPS API] Contrôle hors zone échoué', zoneError?.message || zoneError);
       }
 
-      const { position, zoneCheck, batteryCheck } = await ingestPosition(supabase, collar, {
-        latitude: lat,
-        longitude: lng,
-        batteryPercent,
-        recordedAt: body.recordedAt || null,
-        source: 'manual',
-      });
-
-      return res.status(201).json({ ok: true, collarId: collar.id, positionId: position.id, zoneCheck, batteryCheck });
+      return res.status(201).json({ ok: true, collarId: collar.id, imei, positionId: position.id, zoneCheck });
     }
 
     // ---------------- SIMULATION ----------------

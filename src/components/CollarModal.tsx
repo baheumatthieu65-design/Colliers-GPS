@@ -8,29 +8,6 @@ interface CollarModalProps {
   onSave: (collarData: Partial<GPSCollar>) => Promise<boolean>;
   initialCollar?: GPSCollar | null;
   zones: GeofenceZone[];
-  /** Colliers existants, utilisés pour proposer automatiquement le prochain numéro libre. */
-  collars?: GPSCollar[];
-}
-
-// Propose le prochain numéro "COL-N" libre à partir des colliers existants,
-// en continuant la même numérotation (ex: COL-1, COL-2 -> COL-3), pour éviter
-// à l'utilisateur de devoir taper/inventer un code à la main. Retombe sur
-// COL-1 si aucun collier existant ne suit ce format.
-function suggestNextCollarNumber(collars: GPSCollar[]): string {
-  let maxNumber = 0;
-  for (const collar of collars || []) {
-    const match = /^COL-(\d+)$/i.exec((collar.collarNumber || '').trim());
-    if (match) maxNumber = Math.max(maxNumber, parseInt(match[1], 10));
-  }
-  const existingNumbers = new Set((collars || []).map((c) => (c.collarNumber || '').trim().toUpperCase()));
-  let next = maxNumber + 1;
-  let candidate = `COL-${next}`;
-  // Filet de sécurité si un numéro a été créé "à la main" hors de la suite logique.
-  while (existingNumbers.has(candidate.toUpperCase())) {
-    next += 1;
-    candidate = `COL-${next}`;
-  }
-  return candidate;
 }
 
 const PRESET_COLORS = [
@@ -52,7 +29,6 @@ export const CollarModal: React.FC<CollarModalProps> = ({
   onSave,
   initialCollar,
   zones,
-  collars = [],
 }) => {
   const [sheepName, setSheepName] = useState('');
   const [animalNumber, setAnimalNumber] = useState('');
@@ -76,7 +52,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
     setAnimalNumber(initialCollar?.animalNumber || '');
     setCollarNumber(
       initialCollar?.collarNumber ||
-      suggestNextCollarNumber(collars)
+      `COL-${Math.floor(100 + Math.random() * 900)}`
     );
     setColor(initialCollar?.color || '#EF4444');
     setActiveZoneId(initialCollar?.activeZoneId || zones[0]?.id || '');
@@ -105,7 +81,7 @@ export const CollarModal: React.FC<CollarModalProps> = ({
         .then((data) => setDangerActive(Boolean(data?.dangerActive)))
         .catch(() => setDangerActive(false));
     }
-  }, [isOpen, initialCollar, zones, collars]);
+  }, [isOpen, initialCollar, zones]);
 
   if (!isOpen) return null;
 
@@ -207,11 +183,6 @@ export const CollarModal: React.FC<CollarModalProps> = ({
               onChange={(e) => setCollarNumber(e.target.value)}
               className={`${inputClass} font-mono`}
             />
-            {!initialCollar && (
-              <p className="text-[10px] text-[#7D8A74] mt-1">
-                Code proposé automatiquement à la suite du dernier collier — modifiable si besoin.
-              </p>
-            )}
           </div>
 
           <div>

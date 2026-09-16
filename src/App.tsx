@@ -10,7 +10,6 @@ import { InteractiveMap } from './components/InteractiveMap';
 import { CollarManager } from './components/CollarManager';
 import { CollarModal } from './components/CollarModal';
 import { PushOrderModal } from './components/PushOrderModal';
-import { ManualPositionModal } from './components/ManualPositionModal';
 import { ZonesManager } from './components/ZonesManager';
 import { GeofenceModal } from './components/GeofenceModal';
 import { AlertsTable } from './components/AlertsTable';
@@ -36,9 +35,6 @@ export default function App() {
 
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
   const [pushModalCollarId, setPushModalCollarId] = useState<string | null>(null);
-
-  const [isManualPositionModalOpen, setIsManualPositionModalOpen] = useState(false);
-  const [manualPositionCollarId, setManualPositionCollarId] = useState<string | null>(null);
 
   const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<GeofenceZone | null>(null);
@@ -231,34 +227,6 @@ export default function App() {
     } catch (err: any) {
       console.error('Error stopping push:', err);
       showNotification(`Erreur : ${err?.message || 'Impossible d’arrêter le PUSH.'}`);
-    }
-  };
-
-  // Saisie manuelle d'une position (remplace l'insertion directe dans
-  // Supabase Studio) : passe par l'API pour que le contrôle hors-zone et le
-  // contrôle batterie faible s'exécutent bien et créent une alerte si besoin.
-  const handleSubmitManualPosition = async (
-    collarId: string,
-    data: { latitude: number; longitude: number; batteryPercent: number | null }
-  ) => {
-    try {
-      const res = await fetch(`/api/collars/${encodeURIComponent(collarId)}/position`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      const result = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(formatApiError(result, res.status));
-
-      await Promise.all([fetchCollars(), fetchAlerts()]);
-      if (result?.zoneCheck?.alerted) showNotification('Position enregistrée — brebis hors zone, alerte créée.');
-      else if (result?.batteryCheck?.alerted) showNotification('Position enregistrée — batterie faible, alerte créée.');
-      else showNotification('Position enregistrée.');
-      return result;
-    } catch (err: any) {
-      console.error('Error submitting manual position:', err);
-      showNotification(`Erreur : ${err?.message || 'Impossible d’enregistrer la position.'}`);
-      return null;
     }
   };
 
@@ -460,10 +428,6 @@ export default function App() {
                 setIsPushModalOpen(true);
               }}
               onStopPushForCollar={handleStopPushForCollar}
-              onOpenManualPositionForCollar={(id) => {
-                setManualPositionCollarId(id);
-                setIsManualPositionModalOpen(true);
-              }}
             />
           )}
 
@@ -578,7 +542,6 @@ export default function App() {
           onSave={handleSaveCollar}
           initialCollar={editingCollar}
           zones={zones}
-          collars={collars}
         />
 
         {/* Push High Frequency Order Modal */}
@@ -588,14 +551,6 @@ export default function App() {
           collars={collars}
           preselectedCollarId={pushModalCollarId}
           onSendPushOrder={handleSendPushOrder}
-        />
-
-        {/* Manual GPS Position Entry Modal */}
-        <ManualPositionModal
-          isOpen={isManualPositionModalOpen}
-          onClose={() => setIsManualPositionModalOpen(false)}
-          collar={collars.find((c) => c.id === manualPositionCollarId) || null}
-          onSubmit={handleSubmitManualPosition}
         />
 
         {/* Geofence Zone Modal */}
