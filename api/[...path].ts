@@ -1062,10 +1062,20 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       if (!durationMinutes || durationMinutes <= 0) return error(res, 400, 'Durée valide requise en minutes.');
       if (!(Number.isInteger(intervalSeconds) && intervalSeconds >= 60 && intervalSeconds <= 86400)) return error(res, 400, 'Cadence PUSH invalide. Utilisez 5, 10, 15, 30 minutes ou une valeur personnalisée en minutes.');
 
-      const configs = await readCollarsConfig();
-      const availableIds = new Set(configs.data.collars.map((c) => c.id));
-      let targets = collarIds.filter((id: any) => id !== 'all' && availableIds.has(String(id))) as string[];
-      if (collarIds.includes('all')) targets = configs.data.collars.map((c) => c.id);
+      // Le PUSH est piloté par Supabase : GitHub ne doit pas pouvoir bloquer
+      // une commande opérationnelle à cause d'un rate-limit ou d'une indisponibilité.
+      const { data: collarRows, error: collarLookupError } = await supabase
+        .from('collars')
+        .select('id, imei')
+        .order('created_at', { ascending: true });
+      if (collarLookupError) return error(res, 400, 'Impossible de lire les colliers dans Supabase.', collarLookupError);
+
+      const availableIds = new Set((collarRows || []).map((row: any) => String(row.id)));
+      let targets = collarIds
+        .filter((id: any) => id !== 'all' && availableIds.has(String(id)))
+        .map((id: any) => String(id)) as string[];
+      if (collarIds.includes('all')) targets = (collarRows || []).map((row: any) => String(row.id));
+      targets = [...new Set(targets)];
       if (!targets.length) return error(res, 400, 'Aucun collier valide sélectionné pour le PUSH.');
 
       const expiresAt = new Date(Date.now() + durationMinutes * 60_000).toISOString();
