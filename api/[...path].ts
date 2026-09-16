@@ -682,55 +682,78 @@ function pointInsideZone(latitude: number, longitude: number, zone: any) {
 }
 
 async function getAssignedZonesForCollar(supabase: any, collarId: string) {
-  const { data: links, error: linksError } = await supabase
-    .from('collar_zones')
-    .select('zone_id')
-    .eq('collar_id', collarId)
-    .eq('enabled', true);
-  if (linksError) throw new Error(`Lecture des clôtures affectées impossible : ${linksError.message}`);
-
-  const zoneIds = [...new Set((links || []).map((link: any) => String(link.zone_id)).filter(Boolean))];
-  if (!zoneIds.length) return [];
-
-  const { data: zones, error: zonesError } = await supabase
-    .from('zones')
-    .select('id,name,type,center_latitude,center_longitude,radius_meters,polygon_coords,enabled')
-    .in('id', zoneIds)
-    .eq('enabled', true);
-  if (zonesError) throw new Error(`Lecture des clôtures impossible : ${zonesError.message}`);
-  return zones || [];
+  // GitHub est la source de vérité de l'affectation des clôtures.
+  // Ne pas dépendre de collar_zones ici : si le miroir Supabase est en retard,
+  // une position GPS réelle doit quand même déclencher l'alerte.
+  const config = await readZonesConfig();
+  return config.data.zones
+    .filter((zone) => zone.active !== false)
+    .filter((zone) => zone.alertOnExit !== false)
+    .filter((zone) => (zone.assignedCollarIds || []).includes(collarId))
+    .map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      type: zone.polygonCoords?.length >= 3 ? 'polygon' : 'circle',
+      center_latitude: zone.centerLat,
+      center_longitude: zone.centerLng,
+      radius_meters: zone.radiusMeters,
+      polygon_coords: zone.polygonCoords || null,
+      enabled: zone.active !== false,
+    }));
 }
 
 async function evaluateZoneExit(supabase: any, collar: any, latitude: number, longitude: number, recordedAt: string) {
   const zones = await getAssignedZonesForCollar(supabase, collar.id);
-  if (!zones.length) return { checked: false, inside: true, alerted: false };
+  if (!zones.length) return { checked: false, inside: true, alerted: false, reason: 'no_assigned_zone' };
 
-  const inside = zones.some((zone: any) => pointInsideZone(latitude, longitude, zone));
-  if (inside) return { checked: true, inside: true, alerted: false };
+  // Une brebis peut être dans plusieurs zones : elle est considérée dedans si
+  // elle est dans au moins une des zones qui lui sont affectées.
+  const outsideZones = zones.filter((zone: any) => !pointInsideZone(latitude, longitude, zone));
+  const inside = outsideZones.length < zones.length;
+  if (inside) return { checked: true, inside: true, alerted: false, reason: 'inside_zone' };
 
-  // Lire les deux dernières positions pour ne créer une alerte qu'au passage
-  // dedans -> dehors. Si c'est la première position connue et qu'elle est
-  // déjà dehors, on alerte également.
+  // On cherche la dernière position antérieure qui était encore dans une zone.
+  // Si aucune position intérieure n'existe, cela couvre aussi le cas important
+  // où une zone vient d'être affectée alors que la brebis est déjà dehors.
   const { data: recentPositions, error: recentError } = await supabase
     .from('positions')
     .select('latitude,longitude,recorded_at,created_at')
     .eq('collar_id', collar.id)
     .order('recorded_at', { ascending: false })
-    .limit(2);
+    .limit(100);
   if (recentError) throw new Error(`Lecture des positions précédentes impossible : ${recentError.message}`);
 
-  const previous = (recentPositions || []).find((position: any) => String(position.recorded_at || '') !== String(recordedAt))
-    || (recentPositions || [])[1];
+  const previousPositions = (recentPositions || []).filter((position: any) =>
+    String(position.recorded_at || '') !== String(recordedAt)
+  );
+  const lastInside = previousPositions.find((position: any) => {
+    const lat = Number(position.latitude);
+    const lng = Number(position.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng)
+      && zones.some((zone: any) => pointInsideZone(lat, lng, zone));
+  });
 
-  let previousInside = null as boolean | null;
-  if (previous && Number.isFinite(Number(previous.latitude)) && Number.isFinite(Number(previous.longitude))) {
-    previousInside = zones.some((zone: any) => pointInsideZone(Number(previous.latitude), Number(previous.longitude), zone));
+  // Une seule alerte par épisode hors-zone. Si la brebis est déjà dehors et
+  // qu'une alerte existe pour cet épisode, on ne spamme pas à chaque trame.
+  const zone = zones[0];
+  const { data: lastAlert, error: alertLookupError } = await supabase
+    .from('alerts')
+    .select('id,created_at,zone_id')
+    .eq('collar_id', collar.id)
+    .eq('zone_id', zone.id)
+    .eq('type', 'zone_exit')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (alertLookupError) throw new Error(`Lecture de la dernière alerte hors zone impossible : ${alertLookupError.message}`);
+
+  const lastInsideAt = lastInside?.recorded_at ? Date.parse(String(lastInside.recorded_at)) : NaN;
+  const lastAlertAt = lastAlert?.created_at ? Date.parse(String(lastAlert.created_at)) : NaN;
+  if (lastAlert && (!Number.isFinite(lastInsideAt) || (Number.isFinite(lastAlertAt) && lastAlertAt >= lastInsideAt))) {
+    return { checked: true, inside: false, alerted: false, reason: 'already_alerted_this_outside_episode' };
   }
 
-  if (previousInside === false) return { checked: true, inside: false, alerted: false };
-
-  const zone = zones[0];
-  const message = `ALERTE HORS ZONE : ${collar.animal_name || collar.name || collar.internal_code || 'Collier'} a quitté la zone de sécurité ${zone.name}.`;
+  const message = `ALERTE HORS ZONE : ${collar.animal_name || collar.name || collar.internal_code || 'Collier'} est hors de la zone de sécurité ${zone.name}.`;
   const { data: alert, error: alertError } = await supabase.from('alerts').insert({
     collar_id: collar.id,
     zone_id: zone.id,
@@ -743,7 +766,7 @@ async function evaluateZoneExit(supabase: any, collar: any, latitude: number, lo
   }).select('*').single();
   if (alertError) throw new Error(`Impossible de créer l'alerte hors zone : ${alertError.message}`);
 
-  return { checked: true, inside: false, alerted: true, alertId: alert?.id || null };
+  return { checked: true, inside: false, alerted: true, alertId: alert?.id || null, zoneId: zone.id, zoneName: zone.name };
 }
 
 export default async function handler(req: AnyReq, res: AnyRes) {
