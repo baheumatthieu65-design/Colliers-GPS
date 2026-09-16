@@ -9,7 +9,7 @@
       "mode": "real",
       "status": "active",
       "activeZoneId": "38d8ba8c-bb62-4fac-929e-54e4f331d623",
-      "baseTransmissionMinutes": 6,
+      "baseTransmissionMinutes": 30,
       "dangerActive": false,
       "animalNumber": "456-244"
     }
