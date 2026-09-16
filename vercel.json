@@ -9,6 +9,7 @@
     {"source":"/api/push-danger","destination":"/api/push-danger.ts"},
     {"source":"/api/collar-danger","destination":"/api/collar-danger.ts"},
     {"source":"/api/danger","destination":"/api/danger.ts"},
+    {"source":"/api/positions-check","destination":"/api/positions-check.ts"},
     {"source":"/api/(.*)","destination":"/api/[...path].ts"}
   ]
 }
