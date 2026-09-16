@@ -424,7 +424,6 @@ function mapCollar(
   row: any,
   assignedZoneId?: string | null,
   latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
-  latestPushDurationMinutes?: number,
 ) {
   return {
     id: config.id,
@@ -455,7 +454,7 @@ function mapCollar(
         active: pushActive,
         intervalSeconds: pushActive ? activeCadenceSeconds : standardCadenceSeconds,
         expiresAt: pushActive ? expiresAt : null,
-        durationMinutes: pushActive && Number(latestPushDurationMinutes) > 0 ? Number(latestPushDurationMinutes) : 0,
+        durationMinutes: pushActive && row?.push_duration_minutes ? Number(row.push_duration_minutes) : 0,
       };
     })(),
     // Ces données viennent de Supabase, pas de la configuration GitHub.
@@ -495,54 +494,6 @@ async function getSupabaseCollarMap(supabase: any, ids: string[]) {
   const { data, error: dbError } = await supabase.from('collars').select('*').in('id', ids);
   if (dbError) throw new Error(`Erreur lecture données techniques des colliers : ${dbError.message}`);
   return new Map((data || []).map((row: any) => [row.id, row]));
-}
-
-// Dernière durée de PUSH ordonnée pour chaque collier.
-// La durée vient de commands.duration_minutes : push_expires_at indique la
-// date de fin, mais ne contient pas à lui seul la durée initialement ordonnée.
-async function getLatestPushDurationMap(supabase: any, ids: string[]) {
-  const result = new Map<string, number>();
-  if (!ids.length) return result;
-
-  const { data: commands, error: commandsError } = await supabase
-    .from('commands')
-    .select('id, duration_minutes, created_at')
-    .eq('command_type', 'push')
-    .not('duration_minutes', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  if (commandsError) {
-    throw new Error(`Erreur lecture des durées PUSH : ${commandsError.message}`);
-  }
-
-  const commandIds = (commands || []).map((command: any) => command.id).filter(Boolean);
-  if (!commandIds.length) return result;
-
-  const { data: targets, error: targetsError } = await supabase
-    .from('command_targets')
-    .select('collar_id, command_id')
-    .in('command_id', commandIds)
-    .in('collar_id', ids);
-
-  if (targetsError) {
-    throw new Error(`Erreur lecture des cibles PUSH : ${targetsError.message}`);
-  }
-
-  const durationByCommand = new Map(
-    (commands || []).map((command: any) => [command.id, Number(command.duration_minutes)])
-  );
-
-  // Les commandes sont déjà triées de la plus récente à la plus ancienne :
-  // la première rencontrée pour un collier est donc sa dernière durée ordonnée.
-  for (const target of targets || []) {
-    const duration = durationByCommand.get(target.command_id);
-    if (Number.isFinite(duration) && duration > 0 && !result.has(target.collar_id)) {
-      result.set(target.collar_id, duration);
-    }
-  }
-
-  return result;
 }
 
 // Dernière position GPS réelle de chaque collier.
@@ -687,6 +638,114 @@ async function queueStandardCadenceCommand(supabase: any, collar: any, cadenceSe
   return command;
 }
 
+
+function pointInPolygon(latitude: number, longitude: number, polygon: Array<[number, number]>) {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = Number(polygon[i][0]);
+    const xi = Number(polygon[i][1]);
+    const yj = Number(polygon[j][0]);
+    const xj = Number(polygon[j][1]);
+    const intersects = ((yi > latitude) !== (yj > latitude))
+      && (longitude < ((xj - xi) * (latitude - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000;
+  const toRad = (value: number) => value * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, a)));
+}
+
+function pointInsideZone(latitude: number, longitude: number, zone: any) {
+  if (!zone || zone.enabled === false) return false;
+  if (zone.type === 'polygon') {
+    const raw = Array.isArray(zone.polygon_coords) ? zone.polygon_coords : [];
+    const polygon = raw
+      .map((p: any) => Array.isArray(p) ? [Number(p[0]), Number(p[1])] as [number, number] : null)
+      .filter((p: any): p is [number, number] => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    return pointInPolygon(latitude, longitude, polygon);
+  }
+
+  const centerLat = Number(zone.center_latitude);
+  const centerLng = Number(zone.center_longitude);
+  const radius = Number(zone.radius_meters);
+  if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng) || !Number.isFinite(radius) || radius <= 0) return false;
+  return distanceMeters(latitude, longitude, centerLat, centerLng) <= radius;
+}
+
+async function getAssignedZonesForCollar(supabase: any, collarId: string) {
+  const { data: links, error: linksError } = await supabase
+    .from('collar_zones')
+    .select('zone_id')
+    .eq('collar_id', collarId)
+    .eq('enabled', true);
+  if (linksError) throw new Error(`Lecture des clôtures affectées impossible : ${linksError.message}`);
+
+  const zoneIds = [...new Set((links || []).map((link: any) => String(link.zone_id)).filter(Boolean))];
+  if (!zoneIds.length) return [];
+
+  const { data: zones, error: zonesError } = await supabase
+    .from('zones')
+    .select('id,name,type,center_latitude,center_longitude,radius_meters,polygon_coords,enabled')
+    .in('id', zoneIds)
+    .eq('enabled', true);
+  if (zonesError) throw new Error(`Lecture des clôtures impossible : ${zonesError.message}`);
+  return zones || [];
+}
+
+async function evaluateZoneExit(supabase: any, collar: any, latitude: number, longitude: number, recordedAt: string) {
+  const zones = await getAssignedZonesForCollar(supabase, collar.id);
+  if (!zones.length) return { checked: false, inside: true, alerted: false };
+
+  const inside = zones.some((zone: any) => pointInsideZone(latitude, longitude, zone));
+  if (inside) return { checked: true, inside: true, alerted: false };
+
+  // Lire les deux dernières positions pour ne créer une alerte qu'au passage
+  // dedans -> dehors. Si c'est la première position connue et qu'elle est
+  // déjà dehors, on alerte également.
+  const { data: recentPositions, error: recentError } = await supabase
+    .from('positions')
+    .select('latitude,longitude,recorded_at,created_at')
+    .eq('collar_id', collar.id)
+    .order('recorded_at', { ascending: false })
+    .limit(2);
+  if (recentError) throw new Error(`Lecture des positions précédentes impossible : ${recentError.message}`);
+
+  const previous = (recentPositions || []).find((position: any) => String(position.recorded_at || '') !== String(recordedAt))
+    || (recentPositions || [])[1];
+
+  let previousInside = null as boolean | null;
+  if (previous && Number.isFinite(Number(previous.latitude)) && Number.isFinite(Number(previous.longitude))) {
+    previousInside = zones.some((zone: any) => pointInsideZone(Number(previous.latitude), Number(previous.longitude), zone));
+  }
+
+  if (previousInside === false) return { checked: true, inside: false, alerted: false };
+
+  const zone = zones[0];
+  const message = `ALERTE HORS ZONE : ${collar.animal_name || collar.name || collar.internal_code || 'Collier'} a quitté la zone de sécurité ${zone.name}.`;
+  const { data: alert, error: alertError } = await supabase.from('alerts').insert({
+    collar_id: collar.id,
+    zone_id: zone.id,
+    type: 'zone_exit',
+    severity: 'warning',
+    message,
+    latitude,
+    longitude,
+    battery_percent: collar.battery_percent ?? null,
+  }).select('*').single();
+  if (alertError) throw new Error(`Impossible de créer l'alerte hors zone : ${alertError.message}`);
+
+  return { checked: true, inside: false, alerted: true, alertId: alert?.id || null };
+}
+
 export default async function handler(req: AnyReq, res: AnyRes) {
   cors(res);
 
@@ -727,10 +786,9 @@ export default async function handler(req: AnyReq, res: AnyRes) {
     if (path === 'collars' && method === 'GET') {
       const config = await readCollarsConfig();
       const ids = config.data.collars.map((c) => c.id);
-      let [rows, latestPositions, latestPushDurations] = await Promise.all([
+      let [rows, latestPositions] = await Promise.all([
         getSupabaseCollarMap(supabase, ids),
         getLatestPositionMap(supabase, ids),
-        getLatestPushDurationMap(supabase, ids),
       ]);
       const refreshedRows = await refreshExpiredPushCadence(supabase, Array.from(rows.values()));
       rows = new Map(refreshedRows.map((row: any) => [row.id, row]));
@@ -745,7 +803,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
       return res.status(200).json(
         config.data.collars.map((c) =>
-          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id), latestPushDurations.get(c.id))
+          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
         )
       );
     }
@@ -1259,7 +1317,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       }).select('*').single();
       if (positionError) return error(res, 400, 'Impossible de stocker la position MQTT.', positionError);
 
-      await supabase.from('collars').update({
+      const { error: collarUpdateError } = await supabase.from('collars').update({
         last_latitude: lat,
         last_longitude: lng,
         last_altitude: body.altitude ?? null,
@@ -1268,8 +1326,21 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         signal_strength: body.signalStrength ?? collar.signal_strength,
         last_seen: recordedAt,
       }).eq('id', collar.id);
+      if (collarUpdateError) return error(res, 400, 'Position enregistrée mais mise à jour du collier impossible.', collarUpdateError);
 
-      return res.status(201).json({ ok: true, collarId: collar.id, imei, positionId: position.id });
+      // Le contrôle géographique est déclenché à chaque nouvelle trame GPS.
+      // L'insertion dans alerts déclenche ensuite le Web Push Supabase déjà
+      // configuré, sans modifier le firmware BG95.
+      let zoneCheck = { checked: false, inside: true, alerted: false } as any;
+      try {
+        zoneCheck = await evaluateZoneExit(supabase, collar, lat, lng, recordedAt);
+      } catch (zoneError: any) {
+        // La position reste valide même si le contrôle de zone échoue : on ne
+        // perd jamais la télémétrie à cause du système d'alerte.
+        console.error('[PaturGPS API] Contrôle hors zone échoué', zoneError?.message || zoneError);
+      }
+
+      return res.status(201).json({ ok: true, collarId: collar.id, imei, positionId: position.id, zoneCheck });
     }
 
     // ---------------- SIMULATION ----------------
