@@ -1,6 +1,6 @@
 import React from 'react';
 import { GPSCollar, GeofenceZone, shortId } from '../types';
-import { Plus, Trash2, Edit3, Zap, Battery, Signal, Shield, Radio, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, Edit3, Zap, Battery, Signal, Shield, Radio, ShieldAlert, MapPin } from 'lucide-react';
 
 interface CollarManagerProps {
   collars: GPSCollar[];
@@ -10,6 +10,7 @@ interface CollarManagerProps {
   onDeleteCollar: (id: string) => void | Promise<boolean>;
   onOpenPushModalForCollar: (collarId: string) => void;
   onStopPushForCollar: (collarId: string) => void;
+  onOpenManualPositionForCollar: (collarId: string) => void;
 }
 
 function formatLastGpsDate(value: string | null | undefined, hasGps: boolean) {
@@ -42,6 +43,7 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
   onDeleteCollar,
   onOpenPushModalForCollar,
   onStopPushForCollar,
+  onOpenManualPositionForCollar,
 }) => {
   const handleEdit = (collar: GPSCollar) => {
     console.log('[PaturGPS] Modifier collier:', shortId(collar.id));
@@ -75,6 +77,8 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
     } else if (action === 'delete') {
       console.log('[PaturGPS] CAPTURE DELETE', shortId(collar.id));
       void handleDelete(collar);
+    } else if (action === 'position') {
+      onOpenManualPositionForCollar(collar.id);
     }
   };
 
@@ -133,6 +137,25 @@ export const CollarManager: React.FC<CollarManagerProps> = ({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1 relative z-10">
+                    <button
+                      type="button"
+                      title="Signaler une position GPS reçue du collier"
+                      data-collar-action="position"
+                      data-collar-id={collar.id}
+                      aria-label={`Signaler une position pour ${collar.sheepName}`}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenManualPositionForCollar(collar.id);
+                      }}
+                      className="relative z-20 inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-[#C5D1C1] bg-white text-[#5A6F4E] hover:bg-[#F2F4F1] font-bold text-[11px] cursor-pointer touch-manipulation select-none"
+                    >
+                      <MapPin className="w-4 h-4" />
+                    </button>
+
                     <button
                       type="button"
                       title="Modifier le collier"

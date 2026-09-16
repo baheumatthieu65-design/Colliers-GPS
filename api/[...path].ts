@@ -419,11 +419,28 @@ async function refreshExpiredPushCadence(supabase: any, rows: any[]) {
   }));
 }
 
+// Calcule le statut réel (dans/hors zone) à partir de la dernière position GPS
+// connue et de la ou des patatoïdes affectées au collier. Avant ce correctif,
+// le statut était figé à 'inside_zone' : le point rouge "hors zone" sur la
+// carte et le bandeau d'alerte sur la fiche collier ne s'allumaient donc
+// jamais, même quand la brebis était réellement dehors.
+function computeCollarStatus(
+  config: GithubCollarConfig,
+  latestPosition: { latitude: number; longitude: number } | undefined,
+  assignedZones: any[],
+) {
+  if (config.status === 'inactive') return 'offline';
+  if (!latestPosition || !assignedZones.length) return 'inside_zone';
+  const inside = assignedZones.some((zone) => pointInsideZone(latestPosition.latitude, latestPosition.longitude, zone));
+  return inside ? 'inside_zone' : 'out_of_zone';
+}
+
 function mapCollar(
   config: GithubCollarConfig,
   row: any,
   assignedZoneId?: string | null,
   latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
+  assignedZones: any[] = [],
 ) {
   return {
     id: config.id,
@@ -439,7 +456,7 @@ function mapCollar(
     // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
     currentLat: latestPosition?.latitude,
     currentLng: latestPosition?.longitude,
-    status: config.status === 'inactive' ? 'offline' : 'inside_zone',
+    status: computeCollarStatus(config, latestPosition, assignedZones),
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
     pushMode: (() => {
       const standardCadenceSeconds = Number(row?.standard_cadence_seconds) > 0
@@ -769,6 +786,134 @@ async function evaluateZoneExit(supabase: any, collar: any, latitude: number, lo
   return { checked: true, inside: false, alerted: true, alertId: alert?.id || null, zoneId: zone.id, zoneName: zone.name };
 }
 
+const BATTERY_LOW_THRESHOLD_PERCENT = 15;
+
+// Même logique de « un seul épisode = une seule alerte » que evaluateZoneExit,
+// mais pour la batterie : pas de nouvelle alerte tant que la batterie n'est
+// pas remontée au-dessus du seuil puis redescendue en dessous.
+async function evaluateBatteryLow(supabase: any, collar: any, latitude: number, longitude: number, batteryPercent: number | null | undefined, recordedAt: string) {
+  if (batteryPercent == null || !Number.isFinite(Number(batteryPercent))) {
+    return { checked: false, low: false, alerted: false, reason: 'no_battery_reading' };
+  }
+  const battery = Number(batteryPercent);
+  if (battery >= BATTERY_LOW_THRESHOLD_PERCENT) {
+    return { checked: true, low: false, alerted: false, reason: 'battery_ok' };
+  }
+
+  const { data: recentPositions, error: recentError } = await supabase
+    .from('positions')
+    .select('battery_percent,recorded_at')
+    .eq('collar_id', collar.id)
+    .not('battery_percent', 'is', null)
+    .order('recorded_at', { ascending: false })
+    .limit(100);
+  if (recentError) throw new Error(`Lecture des niveaux de batterie précédents impossible : ${recentError.message}`);
+
+  const previousReadings = (recentPositions || []).filter((position: any) =>
+    String(position.recorded_at || '') !== String(recordedAt)
+  );
+  const lastOk = previousReadings.find((position: any) => Number(position.battery_percent) >= BATTERY_LOW_THRESHOLD_PERCENT);
+
+  const { data: lastAlert, error: alertLookupError } = await supabase
+    .from('alerts')
+    .select('id,created_at')
+    .eq('collar_id', collar.id)
+    .eq('type', 'low_battery')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (alertLookupError) throw new Error(`Lecture de la dernière alerte batterie impossible : ${alertLookupError.message}`);
+
+  const lastOkAt = lastOk?.recorded_at ? Date.parse(String(lastOk.recorded_at)) : NaN;
+  const lastAlertAt = lastAlert?.created_at ? Date.parse(String(lastAlert.created_at)) : NaN;
+  if (lastAlert && (!Number.isFinite(lastOkAt) || (Number.isFinite(lastAlertAt) && lastAlertAt >= lastOkAt))) {
+    return { checked: true, low: true, alerted: false, reason: 'already_alerted_this_low_battery_episode' };
+  }
+
+  const message = `ALERTE BATTERIE FAIBLE : ${collar.animal_name || collar.name || collar.internal_code || 'Collier'} est à ${battery}% de batterie.`;
+  const { data: alert, error: alertError } = await supabase.from('alerts').insert({
+    collar_id: collar.id,
+    zone_id: null,
+    type: 'low_battery',
+    severity: 'warning',
+    message,
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    battery_percent: battery,
+  }).select('*').single();
+  if (alertError) throw new Error(`Impossible de créer l'alerte batterie faible : ${alertError.message}`);
+
+  return { checked: true, low: true, alerted: true, alertId: alert?.id || null };
+}
+
+type IngestPositionInput = {
+  latitude: number;
+  longitude: number;
+  altitude?: number | null;
+  accuracy?: number | null;
+  speed?: number | null;
+  heading?: number | null;
+  batteryPercent?: number | null;
+  signalStrength?: number | null;
+  recordedAt?: string | null;
+  source: 'manual' | 'simulation' | 'gps' | 'mqtt';
+};
+
+// Point d'entrée UNIQUE pour toute nouvelle position, qu'elle vienne du BG95
+// (MQTT, /api/telemetry) ou d'une saisie manuelle dans l'app (/api/collars/:id/position).
+// Avant ce correctif, les positions ajoutées directement dans Supabase (hors
+// API) ne déclenchaient JAMAIS evaluateZoneExit : aucune alerte hors-zone
+// n'était donc jamais créée pour ces positions-là.
+async function ingestPosition(supabase: any, collar: any, input: IngestPositionInput) {
+  const recordedAt = input.recordedAt || new Date().toISOString();
+  const { data: position, error: positionError } = await supabase.from('positions').insert({
+    collar_id: collar.id,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    altitude: input.altitude ?? null,
+    accuracy: input.accuracy ?? null,
+    speed: input.speed ?? null,
+    heading: input.heading ?? null,
+    battery_percent: input.batteryPercent ?? null,
+    signal_strength: input.signalStrength ?? null,
+    source: input.source,
+    recorded_at: recordedAt,
+  }).select('*').single();
+  if (positionError) throw new Error(`Impossible de stocker la position : ${positionError.message}`);
+
+  const { error: collarUpdateError } = await supabase.from('collars').update({
+    last_latitude: input.latitude,
+    last_longitude: input.longitude,
+    last_altitude: input.altitude ?? null,
+    last_accuracy: input.accuracy ?? null,
+    battery_percent: input.batteryPercent ?? collar.battery_percent,
+    signal_strength: input.signalStrength ?? collar.signal_strength,
+    last_seen: recordedAt,
+  }).eq('id', collar.id);
+  if (collarUpdateError) throw new Error(`Position enregistrée mais mise à jour du collier impossible : ${collarUpdateError.message}`);
+
+  // Les deux contrôles tournent à chaque nouvelle position, peu importe la
+  // source. L'insertion dans `alerts` déclenche ensuite le Web Push Supabase
+  // (webhook côté dashboard Supabase, à configurer séparément).
+  let zoneCheck: any = { checked: false, inside: true, alerted: false };
+  try {
+    zoneCheck = await evaluateZoneExit(supabase, collar, input.latitude, input.longitude, recordedAt);
+  } catch (zoneError: any) {
+    // La position reste valide même si le contrôle de zone échoue : on ne
+    // perd jamais la télémétrie à cause du système d'alerte.
+    console.error('[PaturGPS API] Contrôle hors zone échoué', zoneError?.message || zoneError);
+  }
+
+  let batteryCheck: any = { checked: false, low: false, alerted: false };
+  try {
+    batteryCheck = await evaluateBatteryLow(supabase, collar, input.latitude, input.longitude, input.batteryPercent, recordedAt);
+  } catch (batteryError: any) {
+    console.error('[PaturGPS API] Contrôle batterie faible échoué', batteryError?.message || batteryError);
+  }
+
+  return { position, zoneCheck, batteryCheck };
+}
+
 export default async function handler(req: AnyReq, res: AnyRes) {
   cors(res);
 
@@ -817,16 +962,32 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       rows = new Map(refreshedRows.map((row: any) => [row.id, row]));
 
       const zoneByCollar = new Map<string, string>();
+      // Toutes les zones affectées à chaque collier (un collier peut être dans
+      // plusieurs patatoïdes) : nécessaire pour calculer le vrai statut
+      // dans/hors zone ci-dessous, au lieu de le figer à 'inside_zone'.
+      const zonesByCollar = new Map<string, any[]>();
       const zones = await readZonesConfig();
       for (const zone of zones.data.zones) {
+        if (zone.active === false) continue;
+        const zoneForStatus = {
+          type: zone.polygonCoords && zone.polygonCoords.length >= 3 ? 'polygon' : 'circle',
+          polygon_coords: zone.polygonCoords || null,
+          center_latitude: zone.centerLat,
+          center_longitude: zone.centerLng,
+          radius_meters: zone.radiusMeters,
+          enabled: true,
+        };
         for (const collarId of zone.assignedCollarIds || []) {
           zoneByCollar.set(collarId, zone.id);
+          const list = zonesByCollar.get(collarId) || [];
+          list.push(zoneForStatus);
+          zonesByCollar.set(collarId, list);
         }
       }
 
       return res.status(200).json(
         config.data.collars.map((c) =>
-          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
+          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id), zonesByCollar.get(c.id) || [])
         )
       );
     }
@@ -1324,46 +1485,56 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const lng = Number(body.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return error(res, 400, 'Latitude/longitude invalides.');
 
-      const recordedAt = body.recordedAt || new Date().toISOString();
-      const { data: position, error: positionError } = await supabase.from('positions').insert({
-        collar_id: collar.id,
+      const { position, zoneCheck, batteryCheck } = await ingestPosition(supabase, collar, {
         latitude: lat,
         longitude: lng,
         altitude: body.altitude ?? null,
         accuracy: body.accuracy ?? null,
         speed: body.speed ?? null,
         heading: body.heading ?? null,
-        battery_percent: body.batteryPercent ?? null,
-        signal_strength: body.signalStrength ?? null,
+        batteryPercent: body.batteryPercent ?? null,
+        signalStrength: body.signalStrength ?? null,
+        recordedAt: body.recordedAt || null,
         source: 'mqtt',
-        recorded_at: recordedAt,
-      }).select('*').single();
-      if (positionError) return error(res, 400, 'Impossible de stocker la position MQTT.', positionError);
+      });
 
-      const { error: collarUpdateError } = await supabase.from('collars').update({
-        last_latitude: lat,
-        last_longitude: lng,
-        last_altitude: body.altitude ?? null,
-        last_accuracy: body.accuracy ?? null,
-        battery_percent: body.batteryPercent ?? collar.battery_percent,
-        signal_strength: body.signalStrength ?? collar.signal_strength,
-        last_seen: recordedAt,
-      }).eq('id', collar.id);
-      if (collarUpdateError) return error(res, 400, 'Position enregistrée mais mise à jour du collier impossible.', collarUpdateError);
+      return res.status(201).json({ ok: true, collarId: collar.id, imei, positionId: position.id, zoneCheck, batteryCheck });
+    }
 
-      // Le contrôle géographique est déclenché à chaque nouvelle trame GPS.
-      // L'insertion dans alerts déclenche ensuite le Web Push Supabase déjà
-      // configuré, sans modifier le firmware BG95.
-      let zoneCheck = { checked: false, inside: true, alerted: false } as any;
-      try {
-        zoneCheck = await evaluateZoneExit(supabase, collar, lat, lng, recordedAt);
-      } catch (zoneError: any) {
-        // La position reste valide même si le contrôle de zone échoue : on ne
-        // perd jamais la télémétrie à cause du système d'alerte.
-        console.error('[PaturGPS API] Contrôle hors zone échoué', zoneError?.message || zoneError);
+    // ---------------- SAISIE MANUELLE D'UNE POSITION (depuis l'app) ----------------
+    // Tant que le worker MQTT/BG95 n'est pas branché, c'est le moyen recommandé
+    // d'enregistrer une position reçue du collier (SMS, appel...) : contrairement
+    // à une insertion directe dans Supabase Studio, cette route déclenche bien
+    // le contrôle hors-zone et le contrôle batterie faible.
+    const manualPositionMatch = path.match(/^collars\/([^/]+)\/position$/);
+    if (manualPositionMatch && method === 'POST') {
+      const collarId = manualPositionMatch[1];
+      const body = req.body || {};
+
+      const lat = Number(body.latitude);
+      const lng = Number(body.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return error(res, 400, 'Latitude/longitude invalides.');
+
+      const { data: collar, error: collarError } = await supabase.from('collars').select('*').eq('id', collarId).maybeSingle();
+      if (collarError) return error(res, 400, 'Recherche du collier impossible.', collarError);
+      if (!collar) return error(res, 404, 'Collier introuvable.', { collarId });
+
+      const batteryPercent = body.batteryPercent !== undefined && body.batteryPercent !== null && body.batteryPercent !== ''
+        ? Number(body.batteryPercent)
+        : null;
+      if (batteryPercent != null && (!Number.isFinite(batteryPercent) || batteryPercent < 0 || batteryPercent > 100)) {
+        return error(res, 400, 'Batterie invalide (0 à 100).');
       }
 
-      return res.status(201).json({ ok: true, collarId: collar.id, imei, positionId: position.id, zoneCheck });
+      const { position, zoneCheck, batteryCheck } = await ingestPosition(supabase, collar, {
+        latitude: lat,
+        longitude: lng,
+        batteryPercent,
+        recordedAt: body.recordedAt || null,
+        source: 'manual',
+      });
+
+      return res.status(201).json({ ok: true, collarId: collar.id, positionId: position.id, zoneCheck, batteryCheck });
     }
 
     // ---------------- SIMULATION ----------------

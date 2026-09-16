@@ -1,6 +1,100 @@
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
-const OWNER=process.env.GITHUB_REPO_OWNER||'baheumatthieu65-design'; const REPO=process.env.GITHUB_REPO_NAME||'Colliers-GPS'; const BRANCH=process.env.GITHUB_BRANCH||'main';
-const out=(res:any,c:number,b:any)=>{res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('Cache-Control','no-store');return res.status(c).json(b)};
-async function config(){const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/config/collars.json?ref=${encodeURIComponent(BRANCH)}`,{headers:{Accept:'application/vnd.github+json',Authorization:`Bearer ${process.env.GITHUB_TOKEN||''}`,'X-GitHub-Api-Version':'2022-11-28'},cache:'no-store'});if(!r.ok)throw new Error(`Lecture GitHub impossible (${r.status})`);const p:any=await r.json();return JSON.parse(Buffer.from(String(p.content||'').replace(/\n/g,''),'base64').toString('utf8'));}
-export default async function handler(req:any,res:any){if(req.method==='OPTIONS')return out(res,204,{});if(req.method!=='POST')return out(res,405,{ok:false,error:'Méthode non autorisée.'});if(!process.env.SUPABASE_URL||!process.env.SUPABASE_SERVICE_ROLE_KEY||!process.env.VAPID_PRIVATE_KEY||!process.env.VAPID_PUBLIC_KEY||!process.env.VAPID_SUBJECT)return out(res,503,{ok:false,error:'Web Push non configuré sur Vercel.'});const secret=process.env.PUSH_WEBHOOK_SECRET;if(secret&&req.headers?.['x-push-webhook-secret']!==secret)return out(res,401,{ok:false,error:'Non autorisé.'});try{const body=req.body||{};const row=body.record||body;const danger=row.DANGER??row.danger??row.Danger;if(String(danger??'').trim()==='')return out(res,200,{ok:true,ignored:true});const cfg=await config();const c=(cfg.collars||[]).find((x:any)=>x.id===row.collar_id);if(!c?.dangerActive)return out(res,200,{ok:true,ignored:true,reason:'danger_inactif'});const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{autoRefreshToken:false,persistSession:false}});webpush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY);const basePayload={title:'🚨 DANGER — Pâtur\'GPS',body:`${c.sheepName||c.collarNumber||'Collier'} : ${danger}`,kind:'danger',requireInteraction:true,renotify:true,vibrate:[200,100,200],url:'./'};const {data:subs,error}=await supabase.from('push_subscriptions').select('id,endpoint,p256dh,auth').eq('enabled',true);if(error)throw new Error(error.message);let sent=0,removed=0;for(const sub of subs||[]){for(let i=0;i<10;i++){try{const payload=JSON.stringify({...basePayload,tag:`paturgps-danger-${row.id||Date.now()}-${i}`});await webpush.sendNotification({endpoint:sub.endpoint,keys:{p256dh:sub.p256dh,auth:sub.auth}},payload);sent++;}catch(e:any){if(e?.statusCode===404||e?.statusCode===410){await supabase.from('push_subscriptions').delete().eq('id',sub.id);removed++;}break;}if(i<9)await new Promise(resolve=>setTimeout(resolve,2000));}}return out(res,200,{ok:true,sent,removed,repetitions:10,intervalMs:2000});}catch(e:any){return out(res,500,{ok:false,error:e?.message||'Erreur notification DANGER.'});}}
+
+const OWNER = process.env.GITHUB_REPO_OWNER || 'baheumatthieu65-design';
+const REPO = process.env.GITHUB_REPO_NAME || 'Colliers-GPS';
+const BRANCH = process.env.GITHUB_BRANCH || 'main';
+
+const out = (res: any, c: number, b: any) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(c).json(b);
+};
+
+async function config() {
+  const r = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/contents/config/collars.json?ref=${encodeURIComponent(BRANCH)}`,
+    {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN || ''}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      cache: 'no-store',
+    }
+  );
+  if (!r.ok) throw new Error(`Lecture GitHub impossible (${r.status})`);
+  const p: any = await r.json();
+  return JSON.parse(Buffer.from(String(p.content || '').replace(/\n/g, ''), 'base64').toString('utf8'));
+}
+
+export default async function handler(req: any, res: any) {
+  if (req.method === 'OPTIONS') return out(res, 204, {});
+  if (req.method !== 'POST') return out(res, 405, { ok: false, error: 'Méthode non autorisée.' });
+  if (
+    !process.env.SUPABASE_URL ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    !process.env.VAPID_PRIVATE_KEY ||
+    !process.env.VAPID_PUBLIC_KEY ||
+    !process.env.VAPID_SUBJECT
+  ) {
+    return out(res, 503, { ok: false, error: 'Web Push non configuré sur Vercel.' });
+  }
+  const secret = process.env.PUSH_WEBHOOK_SECRET;
+  if (secret && req.headers?.['x-push-webhook-secret'] !== secret) return out(res, 401, { ok: false, error: 'Non autorisé.' });
+
+  try {
+    const body = req.body || {};
+    const row = body.record || body;
+    const danger = row.DANGER ?? row.danger ?? row.Danger;
+    if (String(danger ?? '').trim() === '') return out(res, 200, { ok: true, ignored: true });
+
+    const cfg = await config();
+    const c = (cfg.collars || []).find((x: any) => x.id === row.collar_id);
+    if (!c?.dangerActive) return out(res, 200, { ok: true, ignored: true, reason: 'danger_inactif' });
+
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+
+    // IMPORTANT : un seul message Web Push est envoyé ici, par abonnement.
+    // La répétition « 10 notifications espacées de 2 secondes » est gérée
+    // exclusivement par le service worker (public/push-handler.js) à la
+    // réception de ce message (kind: 'danger'). Avant ce correctif, cette
+    // route bouclait ELLE AUSSI 10 fois avec 2 s d'attente : combinée à la
+    // boucle du service worker, un seul événement DANGER pouvait afficher
+    // jusqu'à 10 × 10 = 100 notifications sur le téléphone au lieu de 10.
+    const payload = JSON.stringify({
+      title: "🚨 DANGER — Pâtur'GPS",
+      body: `${c.sheepName || c.collarNumber || 'Collier'} : ${danger}`,
+      kind: 'danger',
+      requireInteraction: true,
+      renotify: true,
+      vibrate: [200, 100, 200],
+      url: './',
+      id: row.id || Date.now(),
+    });
+
+    const { data: subs, error } = await supabase.from('push_subscriptions').select('id,endpoint,p256dh,auth').eq('enabled', true);
+    if (error) throw new Error(error.message);
+
+    let sent = 0;
+    let removed = 0;
+    for (const sub of subs || []) {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+        sent++;
+      } catch (e: any) {
+        if (e?.statusCode === 404 || e?.statusCode === 410) {
+          await supabase.from('push_subscriptions').delete().eq('id', sub.id);
+          removed++;
+        }
+      }
+    }
+
+    return out(res, 200, { ok: true, sent, removed, deviceRepetitions: 10, deviceIntervalMs: 2000 });
+  } catch (e: any) {
+    return out(res, 500, { ok: false, error: e?.message || 'Erreur notification DANGER.' });
+  }
+}
