@@ -4,9 +4,9 @@
     {
       "id": "ff843b96-8b9d-46e8-95bb-253e40f94d97",
       "sheepName": "Fany",
-      "collarNumber": "ID-002",
+      "collarNumber": "ID-001",
       "color": "#EF4444",
-      "mode": "simulation",
+      "mode": "real",
       "status": "active",
       "activeZoneId": "38d8ba8c-bb62-4fac-929e-54e4f331d623",
       "baseTransmissionMinutes": 6,
