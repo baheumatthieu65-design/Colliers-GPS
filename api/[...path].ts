@@ -424,6 +424,7 @@ function mapCollar(
   row: any,
   assignedZoneId?: string | null,
   latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
+  latestPushDurationMinutes?: number,
 ) {
   return {
     id: config.id,
@@ -454,7 +455,7 @@ function mapCollar(
         active: pushActive,
         intervalSeconds: pushActive ? activeCadenceSeconds : standardCadenceSeconds,
         expiresAt: pushActive ? expiresAt : null,
-        durationMinutes: pushActive && row?.push_duration_minutes ? Number(row.push_duration_minutes) : 0,
+        durationMinutes: pushActive && Number(latestPushDurationMinutes) > 0 ? Number(latestPushDurationMinutes) : 0,
       };
     })(),
     // Ces données viennent de Supabase, pas de la configuration GitHub.
@@ -494,6 +495,54 @@ async function getSupabaseCollarMap(supabase: any, ids: string[]) {
   const { data, error: dbError } = await supabase.from('collars').select('*').in('id', ids);
   if (dbError) throw new Error(`Erreur lecture données techniques des colliers : ${dbError.message}`);
   return new Map((data || []).map((row: any) => [row.id, row]));
+}
+
+// Dernière durée de PUSH ordonnée pour chaque collier.
+// La durée vient de commands.duration_minutes : push_expires_at indique la
+// date de fin, mais ne contient pas à lui seul la durée initialement ordonnée.
+async function getLatestPushDurationMap(supabase: any, ids: string[]) {
+  const result = new Map<string, number>();
+  if (!ids.length) return result;
+
+  const { data: commands, error: commandsError } = await supabase
+    .from('commands')
+    .select('id, duration_minutes, created_at')
+    .eq('command_type', 'push')
+    .not('duration_minutes', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (commandsError) {
+    throw new Error(`Erreur lecture des durées PUSH : ${commandsError.message}`);
+  }
+
+  const commandIds = (commands || []).map((command: any) => command.id).filter(Boolean);
+  if (!commandIds.length) return result;
+
+  const { data: targets, error: targetsError } = await supabase
+    .from('command_targets')
+    .select('collar_id, command_id')
+    .in('command_id', commandIds)
+    .in('collar_id', ids);
+
+  if (targetsError) {
+    throw new Error(`Erreur lecture des cibles PUSH : ${targetsError.message}`);
+  }
+
+  const durationByCommand = new Map(
+    (commands || []).map((command: any) => [command.id, Number(command.duration_minutes)])
+  );
+
+  // Les commandes sont déjà triées de la plus récente à la plus ancienne :
+  // la première rencontrée pour un collier est donc sa dernière durée ordonnée.
+  for (const target of targets || []) {
+    const duration = durationByCommand.get(target.command_id);
+    if (Number.isFinite(duration) && duration > 0 && !result.has(target.collar_id)) {
+      result.set(target.collar_id, duration);
+    }
+  }
+
+  return result;
 }
 
 // Dernière position GPS réelle de chaque collier.
@@ -678,9 +727,10 @@ export default async function handler(req: AnyReq, res: AnyRes) {
     if (path === 'collars' && method === 'GET') {
       const config = await readCollarsConfig();
       const ids = config.data.collars.map((c) => c.id);
-      let [rows, latestPositions] = await Promise.all([
+      let [rows, latestPositions, latestPushDurations] = await Promise.all([
         getSupabaseCollarMap(supabase, ids),
         getLatestPositionMap(supabase, ids),
+        getLatestPushDurationMap(supabase, ids),
       ]);
       const refreshedRows = await refreshExpiredPushCadence(supabase, Array.from(rows.values()));
       rows = new Map(refreshedRows.map((row: any) => [row.id, row]));
@@ -695,7 +745,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
 
       return res.status(200).json(
         config.data.collars.map((c) =>
-          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
+          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id), latestPushDurations.get(c.id))
         )
       );
     }
