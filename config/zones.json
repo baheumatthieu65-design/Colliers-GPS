@@ -177,6 +177,21 @@
       "active": true,
       "alertOnExit": true,
       "fillVisible": false
+    },
+    {
+      "id": "1d209f14-4220-42d0-89c7-8721490e205b",
+      "name": "Test",
+      "description": "",
+      "centerLat": 42.845,
+      "centerLng": -0.015,
+      "radiusMeters": 500,
+      "assignedCollarIds": [
+        "ff843b96-8b9d-46e8-95bb-253e40f94d97"
+      ],
+      "color": "#EC4899",
+      "active": true,
+      "alertOnExit": true,
+      "fillVisible": true
     }
   ]
 }
