@@ -182,8 +182,8 @@
       "id": "38d8ba8c-bb62-4fac-929e-54e4f331d623",
       "name": "test",
       "description": "Zone patatoïde tracée manuellement avec 4 sommets",
-      "centerLat": 43.23935940618516,
-      "centerLng": 0.07166215309431069,
+      "centerLat": 43.23885684169785,
+      "centerLng": 0.07178839473019562,
       "radiusMeters": 500,
       "polygonCoords": [
         [
@@ -199,8 +199,8 @@
           0.07284730898828419
         ],
         [
-          43.24003598211823,
-          0.06932938018082258
+          43.238025724169006,
+          0.06983434672436228
         ]
       ],
       "assignedCollarIds": [
