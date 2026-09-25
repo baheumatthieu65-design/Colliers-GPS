@@ -330,7 +330,7 @@ export default function App() {
   }, [activeAlertsCount]);
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative">
+    <div className={`w-full max-w-full overflow-x-hidden bg-[#F2F4F1] text-[#2C3327] flex flex-col font-sans selection:bg-[#5A6F4E] selection:text-white relative ${activeTab === 'map' ? 'h-[100dvh] overflow-hidden' : 'min-h-screen'}`}>
         
         {/* Offline Indicator Toast */}
         <OfflineIndicator />
@@ -362,7 +362,7 @@ export default function App() {
         />
 
         {/* Main Application Canvas View */}
-        <main className={`flex-1 max-w-7xl w-full min-w-0 mx-auto p-2 sm:p-4 pb-20 md:pb-4 ${activeTab === 'map' ? 'space-y-2 overflow-hidden' : 'space-y-2 sm:space-y-3'}`}>
+        <main className={`flex-1 max-w-7xl w-full min-w-0 mx-auto p-2 sm:p-4 pb-20 md:pb-4 ${activeTab === 'map' ? 'flex flex-col min-h-0 space-y-2 overflow-hidden' : 'space-y-2 sm:space-y-3'}`}>
           
           {/* Compact Active Alert Banner */}
           {activeAlertsCount > 0 && activeTab !== 'alerts' && (
@@ -388,7 +388,7 @@ export default function App() {
 
           {/* TAB 1: INTERACTIVE MAP & REAL TIME TRACKING */}
           {activeTab === 'map' && (
-            <div className="space-y-2">
+            <div className="flex-1 min-h-0 flex flex-col">
               <InteractiveMap
                 collars={collars}
                 zones={zones}

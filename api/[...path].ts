@@ -419,11 +419,28 @@ async function refreshExpiredPushCadence(supabase: any, rows: any[]) {
   }));
 }
 
+// Statut réel dans/hors zone, calculé à partir de la dernière position connue
+// et de toutes les zones (patatoïdes) affectées au collier. Avant ce
+// correctif, GET /collars renvoyait toujours 'inside_zone' (sauf collier
+// inactif), donc le badge hors-zone de la carte ne s'allumait jamais — même
+// quand une alerte hors-zone existait bien dans `alerts`.
+function computeCollarStatus(
+  config: GithubCollarConfig,
+  latestPosition: { latitude: number; longitude: number } | undefined,
+  assignedZones: any[],
+) {
+  if (config.status === 'inactive') return 'offline';
+  if (!latestPosition || !assignedZones.length) return 'inside_zone';
+  const inside = assignedZones.some((zone) => pointInsideZone(latestPosition.latitude, latestPosition.longitude, zone));
+  return inside ? 'inside_zone' : 'out_of_zone';
+}
+
 function mapCollar(
   config: GithubCollarConfig,
   row: any,
   assignedZoneId?: string | null,
   latestPosition?: { latitude: number; longitude: number; recordedAt?: string | null; batteryPercent?: number | null },
+  assignedZones: any[] = [],
 ) {
   return {
     id: config.id,
@@ -439,7 +456,7 @@ function mapCollar(
     // Aucune position fictive : sans position GPS réelle, les coordonnées sont absentes.
     currentLat: latestPosition?.latitude,
     currentLng: latestPosition?.longitude,
-    status: config.status === 'inactive' ? 'offline' : 'inside_zone',
+    status: computeCollarStatus(config, latestPosition, assignedZones),
     activeZoneId: assignedZoneId || config.activeZoneId || undefined,
     pushMode: (() => {
       const standardCadenceSeconds = Number(row?.standard_cadence_seconds) > 0
@@ -817,16 +834,32 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       rows = new Map(refreshedRows.map((row: any) => [row.id, row]));
 
       const zoneByCollar = new Map<string, string>();
+      // Toutes les zones actives affectées à chaque collier (un collier peut
+      // être dans plusieurs patatoïdes) — nécessaire pour calculer le vrai
+      // statut dans/hors zone via computeCollarStatus ci-dessous.
+      const zonesByCollar = new Map<string, any[]>();
       const zones = await readZonesConfig();
       for (const zone of zones.data.zones) {
+        if (zone.active === false) continue;
+        const zoneForStatus = {
+          type: zone.polygonCoords && zone.polygonCoords.length >= 3 ? 'polygon' : 'circle',
+          polygon_coords: zone.polygonCoords || null,
+          center_latitude: zone.centerLat,
+          center_longitude: zone.centerLng,
+          radius_meters: zone.radiusMeters,
+          enabled: true,
+        };
         for (const collarId of zone.assignedCollarIds || []) {
           zoneByCollar.set(collarId, zone.id);
+          const list = zonesByCollar.get(collarId) || [];
+          list.push(zoneForStatus);
+          zonesByCollar.set(collarId, list);
         }
       }
 
       return res.status(200).json(
         config.data.collars.map((c) =>
-          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id))
+          mapCollar(c, rows.get(c.id), zoneByCollar.get(c.id), latestPositions.get(c.id), zonesByCollar.get(c.id) || [])
         )
       );
     }
@@ -1251,10 +1284,26 @@ export default async function handler(req: AnyReq, res: AnyRes) {
       const { error: targetError } = await supabase.from('command_targets').insert(targetRows);
       if (targetError) return error(res, 400, 'Commande PUSH créée mais cibles impossibles à enregistrer.', targetError);
 
-      const { error: cadenceError } = await supabase
+      // La durée demandée (durationMinutes) est déjà fiable dans `commands`
+      // (colonne historique), mais mapCollar()/l'UI l'affichent depuis
+      // collars.push_duration_minutes, qui n'était jusqu'ici jamais écrit ici
+      // → toujours 0/absent, d'où le "0 min" affiché malgré un PUSH actif.
+      let cadenceWarning: string | null = null;
+      let { error: cadenceError } = await supabase
         .from('collars')
-        .update({ active_cadence_seconds: intervalSeconds, push_expires_at: expiresAt })
+        .update({ active_cadence_seconds: intervalSeconds, push_expires_at: expiresAt, push_duration_minutes: durationMinutes })
         .in('id', targets);
+      if (cadenceError && /push_duration_minutes/i.test(String(cadenceError.message || ''))) {
+        // La colonne n'existe pas encore côté Supabase : on ne fait jamais
+        // échouer l'ordre PUSH pour ça (cadence + expiration restent
+        // essentielles), on retombe sur l'ancien comportement.
+        cadenceWarning = "Colonne 'push_duration_minutes' absente sur la table collars (Supabase) : ajoutez-la (type integer, nullable) pour que la durée du PUSH s'affiche correctement au lieu de 0 min.";
+        const retry = await supabase
+          .from('collars')
+          .update({ active_cadence_seconds: intervalSeconds, push_expires_at: expiresAt })
+          .in('id', targets);
+        cadenceError = retry.error;
+      }
       if (cadenceError) return error(res, 400, 'Commande PUSH créée mais état de cadence impossible à mettre à jour.', cadenceError);
 
       return res.status(200).json({
@@ -1267,6 +1316,7 @@ export default async function handler(req: AnyReq, res: AnyRes) {
         durationMinutes,
         expiresAt,
         delivery: 'next_wakeup',
+        ...(cadenceWarning ? { warning: cadenceWarning } : {}),
       });
     }
 

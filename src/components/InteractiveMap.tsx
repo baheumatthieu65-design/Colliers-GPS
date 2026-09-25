@@ -1401,7 +1401,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
    */
 
   return (
-    <div className="flex flex-col space-y-2">
+    <div className="h-full min-h-0 flex flex-col space-y-2">
 
       {/* ======================================================
           BARRE SUPÉRIEURE
@@ -1631,7 +1631,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           CARTE
           ====================================================== */}
 
-      <div className="relative w-full h-[calc(100dvh-205px)] min-h-[360px] max-h-none sm:h-[calc(100vh-135px)] sm:min-h-[440px] sm:max-h-[820px] bg-slate-950 overflow-hidden rounded-2xl border border-slate-800 shadow-xl flex flex-col">
+      {/* Mobile : la carte remplit exactement l'espace restant dans la colonne
+          flex (flex-1/min-h-0), calculé par le navigateur lui-même — plus de
+          hauteur fixe devinée (100dvh - Npx), donc plus de débordement sous
+          la barre de navigation du bas selon la hauteur réelle du téléphone.
+          Desktop (sm:) : comportement inchangé, hauteur fixe comme avant. */}
+      <div className="relative w-full flex-1 min-h-0 sm:flex-none sm:h-[calc(100vh-135px)] sm:min-h-[440px] sm:max-h-[820px] bg-slate-950 overflow-hidden rounded-2xl border border-slate-800 shadow-xl flex flex-col">
 
         {/* CONTENEUR LEAFLET */}
 
