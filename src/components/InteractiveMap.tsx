@@ -1964,7 +1964,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
               <span>
                 {selectedCollar.pushMode?.active
-                  ? `PUSH Actif (${selectedCollar.pushMode.intervalSeconds}s)`
+                  ? `PUSH Actif (${selectedCollar.pushMode.intervalSeconds >= 60 ? `${selectedCollar.pushMode.intervalSeconds / 60} min` : `${selectedCollar.pushMode.intervalSeconds}s`})`
                   : 'Forcer Envoi PUSH (10-30 min)'}
               </span>
 
